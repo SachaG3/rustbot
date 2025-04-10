@@ -1,0 +1,23 @@
+# Binaires compilés et dépendances
+/target/
+**/*.rs.bk
+
+# Fichiers de configuration de l'IDE
+.idea/
+.vscode/
+*.iml
+
+# Fichiers d'environnement
+.env
+
+# Fichiers de registre et documentation générés
+Cargo.lock
+
+# Fichiers de système
+.DS_Store
+Thumbs.db
+
+# Fichiers de sauvegarde
+*.bak
+*.swp
+*.swo
