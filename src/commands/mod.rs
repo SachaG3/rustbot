@@ -12,6 +12,9 @@ pub mod games;
 pub mod profile;
 pub mod spam;
 pub mod valorant;
+pub mod cats;
+
+pub use cats::{cat, cats};
 
 pub async fn wait_for_reaction(
     ctx: &Context,

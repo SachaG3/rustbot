@@ -23,6 +23,7 @@ use commands::{
     games::*,
     spam::*,
     valorant::*,
+    cats::*,
 };
 
 use dotenv::dotenv;
@@ -39,7 +40,7 @@ impl TypeMapKey for ShardManagerContainer {
 }
 
 #[group]
-#[commands(help, serverinfo, link, jeux, np, score, juste, usd, bj, rp, rpt, skin, rank)]
+#[commands(help, serverinfo, link, jeux, np, score, juste, usd, bj, rp, rpt, skin, rank, cat, cats)]
 struct General;
 
 #[hook]

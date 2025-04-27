@@ -188,6 +188,32 @@ pub async fn get_user_by_username(pool: &Pool<MySql>, username: &str) -> Result<
     }
 }
 
+pub async fn add_daily_cat(pool: &Pool<MySql>, user_id: i64) -> Result<i64, Error> {
+    let result = sqlx::query("INSERT INTO daily_cats (user_id) VALUES (?)")
+        .bind(user_id)
+        .execute(pool)
+        .await?;
+    
+    Ok(result.last_insert_id() as i64)
+}
+
+pub async fn get_daily_cat_count(pool: &Pool<MySql>, user_id: i64) -> Result<i64, Error> {
+    let row = sqlx::query("SELECT COUNT(*) as cnt FROM daily_cats WHERE user_id = ?")
+        .bind(user_id)
+        .fetch_one(pool)
+        .await?;
+    let cnt: i64 = row.get("cnt");
+    Ok(cnt)
+}
+
+pub async fn has_daily_cat_today(pool: &Pool<MySql>, user_id: i64) -> Result<bool, Error> {
+    let row = sqlx::query("SELECT 1 FROM daily_cats WHERE user_id = ? AND DATE(created_at) = CURRENT_DATE() LIMIT 1")
+        .bind(user_id)
+        .fetch_optional(pool)
+        .await?;
+    Ok(row.is_some())
+}
+
 #[derive(Debug)]
 pub struct User {
     pub id: i64,
