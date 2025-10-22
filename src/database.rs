@@ -134,12 +134,15 @@ pub async fn new_token(pool: &Pool<MySql>, user_id: i64) -> Result<String, Error
 }
 
 pub async fn add_user_to_guild(pool: &Pool<MySql>, user_id: i64, guild_id: u64) -> Result<i64, Error> {
-    let result = sqlx::query("INSERT INTO utilisateur_guilds (id_user, id_guild) VALUES (?, ?)")
+    // Utilise INSERT IGNORE pour éviter les erreurs de doublons
+    let result = sqlx::query("INSERT IGNORE INTO utilisateur_guilds (id_user, id_guild) VALUES (?, ?)")
         .bind(user_id)
         .bind(guild_id as i64)
         .execute(pool)
         .await?;
     
+    // Si aucune ligne n'a été insérée (doublon), on retourne 0
+    // Sinon on retourne l'ID de la nouvelle ligne
     Ok(result.last_insert_id() as i64)
 }
 
@@ -189,7 +192,7 @@ pub async fn get_user_by_username(pool: &Pool<MySql>, username: &str) -> Result<
 }
 
 pub async fn add_daily_cat(pool: &Pool<MySql>, user_id: i64) -> Result<i64, Error> {
-    let result = sqlx::query("INSERT INTO daily_cats (user_id) VALUES (?)")
+    let result = sqlx::query("INSERT INTO daily_cats (user_id, created_at) VALUES (?, NOW())")
         .bind(user_id)
         .execute(pool)
         .await?;
@@ -206,12 +209,130 @@ pub async fn get_daily_cat_count(pool: &Pool<MySql>, user_id: i64) -> Result<i64
     Ok(cnt)
 }
 
+pub async fn debug_daily_cats(pool: &Pool<MySql>, user_id: i64) -> Result<Vec<String>, Error> {
+    let rows = sqlx::query("SELECT created_at FROM daily_cats WHERE user_id = ? ORDER BY created_at DESC LIMIT 5")
+        .bind(user_id)
+        .fetch_all(pool)
+        .await?;
+    
+    let mut dates = Vec::new();
+    for row in rows {
+        // Utiliser le bon type selon ta structure de table (TIMESTAMP)
+        let date: chrono::DateTime<chrono::Utc> = row.get("created_at");
+        dates.push(date.format("%Y-%m-%d %H:%M:%S").to_string());
+    }
+    Ok(dates)
+}
+
 pub async fn has_daily_cat_today(pool: &Pool<MySql>, user_id: i64) -> Result<bool, Error> {
-    let row = sqlx::query("SELECT 1 FROM daily_cats WHERE user_id = ? AND DATE(created_at) = CURRENT_DATE() LIMIT 1")
+    let row = sqlx::query("SELECT 1 FROM daily_cats WHERE user_id = ? AND DATE(created_at) = CURDATE() LIMIT 1")
         .bind(user_id)
         .fetch_optional(pool)
         .await?;
     Ok(row.is_some())
+}
+
+#[derive(Debug, Clone)]
+pub struct CollectedCat {
+    pub id: i32,
+    pub user_id: i32,
+    pub name: String,
+    pub breed: String,
+    pub color: String,
+    pub age_months: i32,
+    pub rarity_score: i32,
+    pub obtained_at: chrono::NaiveDateTime,
+}
+
+pub async fn add_collected_cat(
+    pool: &Pool<MySql>, 
+    user_id: i64, 
+    name: &str,
+    breed: &str, 
+    color: &str, 
+    age_months: i32, 
+    rarity_score: i32
+) -> Result<i32, Error> {
+    let result = sqlx::query(
+        "INSERT INTO collected_cats (user_id, name, breed, color, age_months, rarity_score, obtained_at) VALUES (?, ?, ?, ?, ?, ?, NOW())"
+    )
+        .bind(user_id as i32)
+        .bind(name)
+        .bind(breed)
+        .bind(color)
+        .bind(age_months)
+        .bind(rarity_score)
+        .execute(pool)
+        .await?;
+    
+    Ok(result.last_insert_id() as i32)
+}
+
+pub async fn get_user_cats(pool: &Pool<MySql>, user_id: i64) -> Result<Vec<CollectedCat>, Error> {
+    let rows = sqlx::query(
+        "SELECT id, user_id, name, breed, color, age_months, rarity_score, obtained_at FROM collected_cats WHERE user_id = ? ORDER BY rarity_score DESC, obtained_at DESC"
+    )
+        .bind(user_id as i32)
+        .fetch_all(pool)
+        .await?;
+    
+    let mut cats = Vec::new();
+    for row in rows {
+        cats.push(CollectedCat {
+            id: row.get("id"),
+            user_id: row.get("user_id"),
+            name: row.try_get("name").unwrap_or_else(|_| "Chat".to_string()), // Nom par défaut si NULL
+            breed: row.get("breed"),
+            color: row.get("color"),
+            age_months: row.get("age_months"),
+            rarity_score: row.get("rarity_score"),
+            obtained_at: row.get("obtained_at"),
+        });
+    }
+    
+    Ok(cats)
+}
+
+pub async fn get_cat_by_id(pool: &Pool<MySql>, cat_id: i32) -> Result<Option<CollectedCat>, Error> {
+    let row = sqlx::query(
+        "SELECT id, user_id, name, breed, color, age_months, rarity_score, obtained_at FROM collected_cats WHERE id = ?"
+    )
+        .bind(cat_id)
+        .fetch_optional(pool)
+        .await?;
+    
+    match row {
+        Some(row) => Ok(Some(CollectedCat {
+            id: row.get("id"),
+            user_id: row.get("user_id"),
+            name: row.try_get("name").unwrap_or_else(|_| "Chat".to_string()), // Nom par défaut si NULL
+            breed: row.get("breed"),
+            color: row.get("color"),
+            age_months: row.get("age_months"),
+            rarity_score: row.get("rarity_score"),
+            obtained_at: row.get("obtained_at"),
+        })),
+        None => Ok(None),
+    }
+}
+
+pub async fn transfer_cat(pool: &Pool<MySql>, cat_id: i32, new_owner_id: i64) -> Result<(), Error> {
+    sqlx::query("UPDATE collected_cats SET user_id = ? WHERE id = ?")
+        .bind(new_owner_id as i32)
+        .bind(cat_id)
+        .execute(pool)
+        .await?;
+    
+    Ok(())
+}
+
+pub async fn get_user_cat_count(pool: &Pool<MySql>, user_id: i64) -> Result<i64, Error> {
+    let row = sqlx::query("SELECT COUNT(*) as cnt FROM collected_cats WHERE user_id = ?")
+        .bind(user_id as i32)
+        .fetch_one(pool)
+        .await?;
+    let cnt: i64 = row.get("cnt");
+    Ok(cnt)
 }
 
 #[derive(Debug)]
