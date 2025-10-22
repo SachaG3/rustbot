@@ -320,10 +320,10 @@ pub async fn cat(ctx: &Context, msg: &Message) -> CommandResult {
     // Message principal comme avant
     let mut response = format!("Tu as gagné un 🐱 ! Total: {}", total);
 
-    // 15% de chance d'obtenir un chat secret EN PLUS
+    // 70% de chance d'obtenir un chat secret EN PLUS (événement spécial première journée)
     let secret_cat_chance = {
         let mut rng = thread_rng();
-        rng.gen_range(0..100) < 15
+        rng.gen_range(0..100) < 70
     };
     
     if secret_cat_chance {
