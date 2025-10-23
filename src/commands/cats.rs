@@ -323,7 +323,7 @@ pub async fn cat(ctx: &Context, msg: &Message) -> CommandResult {
     // 70% de chance d'obtenir un chat secret EN PLUS (événement spécial première journée)
     let secret_cat_chance = {
         let mut rng = thread_rng();
-        rng.gen_range(0..100) < 70
+        rng.gen_range(0..100) < 15
     };
     
     if secret_cat_chance {
