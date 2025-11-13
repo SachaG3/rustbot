@@ -118,7 +118,7 @@ impl Cat {
     }
 }
 
-fn get_cat_breeds() -> Vec<CatBreed> {
+pub fn get_cat_breeds() -> Vec<CatBreed> {
     vec![
         CatBreed { name: "Chat de gouttière", rarity_bonus: 0 },
         CatBreed { name: "European Shorthair", rarity_bonus: 1 },
@@ -154,7 +154,7 @@ fn get_cat_breeds() -> Vec<CatBreed> {
     ]
 }
 
-fn get_cat_colors() -> Vec<CatColor> {
+pub fn get_cat_colors() -> Vec<CatColor> {
     vec![
         CatColor { name: "noir", rarity_bonus: 0 },
         CatColor { name: "blanc", rarity_bonus: 1 },
@@ -193,7 +193,7 @@ fn get_cat_colors() -> Vec<CatColor> {
     ]
 }
 
-fn get_cat_names() -> Vec<&'static str> {
+pub fn get_cat_names() -> Vec<&'static str> {
     vec![
         // Noms courts (bonus 0)
         "Max", "Leo", "Mia", "Sox", "Rex", "Zoe", "Ace", "Rio",
@@ -213,7 +213,7 @@ fn get_cat_names() -> Vec<&'static str> {
 }
 
 // Sélection pondérée pour les races (plus rarity_bonus est élevé, plus c'est rare)
-fn select_weighted_breed(breeds: &[CatBreed], rng: &mut impl Rng) -> CatBreed {
+pub fn select_weighted_breed(breeds: &[CatBreed], rng: &mut impl Rng) -> CatBreed {
     // Calculer les poids inversés : plus rarity_bonus est élevé, plus le poids est faible
     let weights: Vec<f32> = breeds.iter()
         .map(|breed| {
@@ -246,7 +246,7 @@ fn select_weighted_breed(breeds: &[CatBreed], rng: &mut impl Rng) -> CatBreed {
 }
 
 // Sélection pondérée pour les couleurs
-fn select_weighted_color(colors: &[CatColor], rng: &mut impl Rng) -> CatColor {
+pub fn select_weighted_color(colors: &[CatColor], rng: &mut impl Rng) -> CatColor {
     // Calculer les poids inversés avec pénalité exponentielle pour les couleurs rares
     let weights: Vec<f32> = colors.iter()
         .map(|color| {
@@ -359,7 +359,7 @@ pub async fn cat(ctx: &Context, msg: &Message) -> CommandResult {
     Ok(())
 }
 
-fn get_rarity_badge(score: i32) -> &'static str {
+pub fn get_rarity_badge(score: i32) -> &'static str {
     match score {
         0..=5 => "",                    // Commun - pas de badge
         6..=8 => "✨ Spécial",         // Peu commun
@@ -371,7 +371,7 @@ fn get_rarity_badge(score: i32) -> &'static str {
     }
 }
 
-fn get_rarity_emoji(score: i32) -> &'static str {
+pub fn get_rarity_emoji(score: i32) -> &'static str {
     match score {
         0..=5 => "🐾",      // Commun
         6..=10 => "✨",     // Peu commun

@@ -196,8 +196,27 @@ pub async fn add_daily_cat(pool: &Pool<MySql>, user_id: i64) -> Result<i64, Erro
         .bind(user_id)
         .execute(pool)
         .await?;
-    
+
     Ok(result.last_insert_id() as i64)
+}
+
+pub async fn add_daily_cat_with_date(pool: &Pool<MySql>, user_id: i64, date: &str) -> Result<i64, Error> {
+    let result = sqlx::query("INSERT INTO daily_cats (user_id, created_at) VALUES (?, ?)")
+        .bind(user_id)
+        .bind(date)
+        .execute(pool)
+        .await?;
+
+    Ok(result.last_insert_id() as i64)
+}
+
+pub async fn has_daily_cat_on_date(pool: &Pool<MySql>, user_id: i64, date: &str) -> Result<bool, Error> {
+    let row = sqlx::query("SELECT 1 FROM daily_cats WHERE user_id = ? AND DATE(created_at) = ? LIMIT 1")
+        .bind(user_id)
+        .bind(date)
+        .fetch_optional(pool)
+        .await?;
+    Ok(row.is_some())
 }
 
 pub async fn get_daily_cat_count(pool: &Pool<MySql>, user_id: i64) -> Result<i64, Error> {
@@ -245,12 +264,12 @@ pub struct CollectedCat {
 }
 
 pub async fn add_collected_cat(
-    pool: &Pool<MySql>, 
-    user_id: i64, 
+    pool: &Pool<MySql>,
+    user_id: i64,
     name: &str,
-    breed: &str, 
-    color: &str, 
-    age_months: i32, 
+    breed: &str,
+    color: &str,
+    age_months: i32,
     rarity_score: i32
 ) -> Result<i32, Error> {
     let result = sqlx::query(
@@ -264,7 +283,33 @@ pub async fn add_collected_cat(
         .bind(rarity_score)
         .execute(pool)
         .await?;
-    
+
+    Ok(result.last_insert_id() as i32)
+}
+
+pub async fn add_collected_cat_with_date(
+    pool: &Pool<MySql>,
+    user_id: i64,
+    name: &str,
+    breed: &str,
+    color: &str,
+    age_months: i32,
+    rarity_score: i32,
+    obtained_at: &str
+) -> Result<i32, Error> {
+    let result = sqlx::query(
+        "INSERT INTO collected_cats (user_id, name, breed, color, age_months, rarity_score, obtained_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+    )
+        .bind(user_id as i32)
+        .bind(name)
+        .bind(breed)
+        .bind(color)
+        .bind(age_months)
+        .bind(rarity_score)
+        .bind(obtained_at)
+        .execute(pool)
+        .await?;
+
     Ok(result.last_insert_id() as i32)
 }
 

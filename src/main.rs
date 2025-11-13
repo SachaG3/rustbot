@@ -2,6 +2,7 @@ mod commands;
 mod database;
 mod events;
 mod utils;
+mod cat_checkup;
 
 use std::env;
 use std::collections::HashSet;
