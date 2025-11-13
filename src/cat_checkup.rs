@@ -58,7 +58,7 @@ fn get_local_date(days_ago: i64) -> String {
 }
 
 pub async fn perform_cat_checkup(ctx: &Context) {
-    let channel_id = ChannelId(764781222492635169);
+    let channel_id = ChannelId(1366197497793347685);
 
     println!("🔍 Début du checkup des cats des {} derniers jours...", CHECKUP_DAYS);
 
