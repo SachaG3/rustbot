@@ -1,39 +1,31 @@
+mod cat_checkup;
 mod commands;
 mod database;
 mod events;
 mod utils;
-mod cat_checkup;
 
-use std::env;
-use std::collections::HashSet;
-use serenity::model::id::UserId;
 use serenity::client::bridge::gateway::ShardManager;
-use serenity::framework::StandardFramework;
 use serenity::framework::standard::{
     macros::{group, hook},
     CommandResult, DispatchError,
 };
+use serenity::framework::StandardFramework;
 use serenity::model::channel::Message;
+use serenity::model::id::UserId;
 use serenity::prelude::*;
-use tokio::sync::Mutex;
+use std::collections::{HashMap, HashSet};
+use std::env;
 use std::sync::Arc;
+use tokio::sync::Mutex;
 
-use commands::{
-    basic::*,
-    profile::*,
-    games::*,
-    spam::*,
-    valorant::*,
-    cats::*,
-    mycats,
-    trade,
-};
+use commands::{basic::*, cats::*, games::*, profile::*, spam::*, valorant::*};
 
 use dotenv::dotenv;
 use sqlx::mysql::MySqlPoolOptions;
 use tracing::{error, info};
 
-use crate::database::DatabasePool;
+use crate::commands::cats::CatEventContainer;
+use crate::database::{ensure_cat_schema, DatabasePool};
 use crate::events::Handler;
 
 pub struct ShardManagerContainer;
@@ -43,7 +35,36 @@ impl TypeMapKey for ShardManagerContainer {
 }
 
 #[group]
-#[commands(help, serverinfo, link, jeux, np, score, juste, usd, bj, rp, rpt, skin, rank, cat, cats, mycats, trade)]
+#[commands(
+    help,
+    serverinfo,
+    link,
+    jeux,
+    np,
+    score,
+    juste,
+    usd,
+    bj,
+    rp,
+    rpt,
+    skin,
+    rank,
+    cat,
+    cats,
+    mycats,
+    trade,
+    house,
+    refuge,
+    refuge_donner,
+    surnom,
+    favori,
+    chat,
+    visite,
+    catstats,
+    catevents,
+    caliner,
+    adopter
+)]
 struct General;
 
 #[hook]
@@ -56,7 +77,10 @@ async fn before(_: &Context, _msg: &Message, command_name: &str) -> bool {
 async fn after(_: &Context, _: &Message, command_name: &str, command_result: CommandResult) {
     match command_result {
         Ok(()) => info!("Commande traitée: {}", command_name),
-        Err(why) => error!("Erreur lors de l'exécution de la commande {}: {:?}", command_name, why),
+        Err(why) => error!(
+            "Erreur lors de l'exécution de la commande {}: {:?}",
+            command_name, why
+        ),
     }
 }
 
@@ -71,7 +95,10 @@ async fn dispatch_error(ctx: &Context, msg: &Message, error: DispatchError, _: &
         if info.is_first_try {
             let _ = msg
                 .channel_id
-                .say(&ctx.http, &format!("Essayez à nouveau dans {} secondes.", info.as_secs()))
+                .say(
+                    &ctx.http,
+                    &format!("Essayez à nouveau dans {} secondes.", info.as_secs()),
+                )
                 .await;
         }
     }
@@ -81,13 +108,13 @@ async fn dispatch_error(ctx: &Context, msg: &Message, error: DispatchError, _: &
 async fn main() {
     // Initialiser la journalisation
     tracing_subscriber::fmt::init();
-    
+
     // Charger les variables d'environnement
     dotenv().ok();
-    
+
     // Récupérer le token Discord depuis les variables d'environnement
     let token = env::var("TOKEN_DISCORD").expect("Token Discord non trouvé");
-    
+
     // Connexion à la base de données
     let database_url = format!(
         "mysql://{}:{}@{}:{}/{}",
@@ -97,43 +124,48 @@ async fn main() {
         env::var("DB_PORT").unwrap_or_else(|_| "3306".to_string()),
         env::var("DB_DATABASE").expect("DB_DATABASE non trouvé")
     );
-    
+
     let pool = MySqlPoolOptions::new()
         .max_connections(5)
         .connect(&database_url)
         .await
         .expect("Erreur lors de la connexion à la base de données");
-    
+
+    ensure_cat_schema(&pool)
+        .await
+        .expect("Erreur lors de la mise à jour du schéma des chats");
+
     // Configurer le framework de commandes
     let framework = StandardFramework::new()
         .configure(|c| {
             c.prefix("^^")
-             .ignore_bots(true)
-             .allow_dm(true)
-             .with_whitespace(true)
-             .case_insensitivity(true)
-             .owners(get_owners())
+                .ignore_bots(true)
+                .allow_dm(true)
+                .with_whitespace(true)
+                .case_insensitivity(true)
+                .owners(get_owners())
         })
         .before(before)
         .after(after)
         .unrecognised_command(unknown_command)
         .on_dispatch_error(dispatch_error)
         .group(&GENERAL_GROUP);
-    
+
     // Initialiser le client Discord
     let mut client = Client::builder(&token, GatewayIntents::all())
         .event_handler(Handler)
         .framework(framework)
         .await
         .expect("Erreur lors de la création du client");
-    
+
     // Stocker le gestionnaire de shards pour une utilisation ultérieure
     {
         let mut data = client.data.write().await;
         data.insert::<ShardManagerContainer>(client.shard_manager.clone());
         data.insert::<DatabasePool>(Arc::new(pool));
+        data.insert::<CatEventContainer>(Arc::new(Mutex::new(HashMap::new())));
     }
-    
+
     // Démarrer le client
     info!("Démarrage du bot...");
     if let Err(why) = client.start().await {
@@ -143,12 +175,12 @@ async fn main() {
 
 fn get_owners() -> HashSet<UserId> {
     let mut owners = HashSet::new();
-    
+
     if let Ok(owner_id) = env::var("OWNER_ID") {
         if let Ok(id) = owner_id.parse::<u64>() {
             owners.insert(UserId(id));
         }
     }
-    
+
     owners
-} 
+}
