@@ -15,8 +15,8 @@ pub mod spam;
 pub mod valorant;
 
 pub use cats::{
-    adopter, caliner, cat, catevents, cats, catstats, chat, favori, house, mycats, refuge,
-    refuge_donner, surnom, trade, visite,
+    adopter, caliner, cat, catcontrol, catevents, cats, catstats, chat, favori, house, mycats,
+    refuge, refuge_donner, surnom, trade, visite,
 };
 
 pub async fn wait_for_reaction(

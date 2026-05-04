@@ -4,6 +4,8 @@ use serenity::prelude::*;
 use sqlx::{Error, MySql, Pool, Row};
 use std::sync::Arc;
 
+use crate::time::{paris_now_naive, paris_today};
+
 pub struct DatabasePool;
 
 impl TypeMapKey for DatabasePool {
@@ -270,8 +272,9 @@ pub async fn get_user_by_username(
 }
 
 pub async fn add_daily_cat(pool: &Pool<MySql>, user_id: i64) -> Result<i64, Error> {
-    let result = sqlx::query("INSERT INTO daily_cats (user_id, created_at) VALUES (?, NOW())")
+    let result = sqlx::query("INSERT INTO daily_cats (user_id, created_at) VALUES (?, ?)")
         .bind(user_id)
+        .bind(paris_now_naive())
         .execute(pool)
         .await?;
 
@@ -316,7 +319,8 @@ pub async fn get_daily_cat_count(pool: &Pool<MySql>, user_id: i64) -> Result<i64
 }
 
 pub async fn get_daily_cat_count_today(pool: &Pool<MySql>) -> Result<i64, Error> {
-    let row = sqlx::query("SELECT COUNT(*) as cnt FROM daily_cats WHERE DATE(created_at) = CURDATE()")
+    let row = sqlx::query("SELECT COUNT(*) as cnt FROM daily_cats WHERE DATE(created_at) = ?")
+        .bind(paris_today())
         .fetch_one(pool)
         .await?;
     Ok(row.get("cnt"))
@@ -341,9 +345,10 @@ pub async fn debug_daily_cats(pool: &Pool<MySql>, user_id: i64) -> Result<Vec<St
 
 pub async fn has_daily_cat_today(pool: &Pool<MySql>, user_id: i64) -> Result<bool, Error> {
     let row = sqlx::query(
-        "SELECT 1 FROM daily_cats WHERE user_id = ? AND DATE(created_at) = CURDATE() LIMIT 1",
+        "SELECT 1 FROM daily_cats WHERE user_id = ? AND DATE(created_at) = ? LIMIT 1",
     )
     .bind(user_id)
+    .bind(paris_today())
     .fetch_optional(pool)
     .await?;
     Ok(row.is_some())
@@ -393,7 +398,7 @@ pub async fn add_collected_cat(
     let personality = random_cat_personality();
     let mood = random_cat_mood();
     let result = sqlx::query(
-        "INSERT INTO collected_cats (user_id, name, breed, color, age_months, rarity_score, obtained_at, personality, mood, location, original_owner_id) VALUES (?, ?, ?, ?, ?, ?, NOW(), ?, ?, 'home', ?)"
+        "INSERT INTO collected_cats (user_id, name, breed, color, age_months, rarity_score, obtained_at, personality, mood, location, original_owner_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'home', ?)"
     )
         .bind(user_id as i32)
         .bind(name)
@@ -401,6 +406,7 @@ pub async fn add_collected_cat(
         .bind(color)
         .bind(age_months)
         .bind(rarity_score)
+        .bind(paris_now_naive())
         .bind(personality)
         .bind(mood)
         .bind(user_id as i32)
@@ -602,8 +608,9 @@ pub async fn move_cat_to_refuge(
     cat_id: i32,
     user_id: i64,
 ) -> Result<(), Error> {
-    sqlx::query("UPDATE collected_cats SET location = 'refuge', refuge_by_user_id = ?, moved_to_refuge_at = NOW(), is_favorite = 0 WHERE id = ? AND user_id = ? AND location = 'home'")
+    sqlx::query("UPDATE collected_cats SET location = 'refuge', refuge_by_user_id = ?, moved_to_refuge_at = ?, is_favorite = 0 WHERE id = ? AND user_id = ? AND location = 'home'")
         .bind(user_id as i32)
+        .bind(paris_now_naive())
         .bind(cat_id)
         .bind(user_id as i32)
         .execute(pool)
@@ -684,12 +691,13 @@ pub async fn add_cat_memory(
     description: &str,
 ) -> Result<(), Error> {
     sqlx::query(
-        "INSERT INTO cat_memories (cat_id, user_id, memory_type, description) VALUES (?, ?, ?, ?)",
+        "INSERT INTO cat_memories (cat_id, user_id, memory_type, description, created_at) VALUES (?, ?, ?, ?, ?)",
     )
     .bind(cat_id)
     .bind(user_id.map(|id| id as i32))
     .bind(memory_type)
     .bind(description)
+    .bind(paris_now_naive())
     .execute(pool)
     .await?;
     Ok(())
@@ -739,7 +747,9 @@ pub async fn get_cat_server_stats(pool: &Pool<MySql>) -> Result<(i64, i64, i64),
 }
 
 pub async fn get_cat_event_count_last_7_days(pool: &Pool<MySql>) -> Result<i64, Error> {
-    let row = sqlx::query("SELECT COUNT(*) as cnt FROM cat_event_history WHERE started_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)")
+    let seven_days_ago = paris_now_naive() - chrono::Duration::days(7);
+    let row = sqlx::query("SELECT COUNT(*) as cnt FROM cat_event_history WHERE started_at >= ?")
+        .bind(seven_days_ago)
         .fetch_one(pool)
         .await?;
     Ok(row.get("cnt"))
@@ -751,10 +761,11 @@ pub async fn record_cat_event_start(
     event_kind: &str,
     theme: Option<&str>,
 ) -> Result<(), Error> {
-    sqlx::query("INSERT INTO cat_event_history (channel_id, event_kind, theme) VALUES (?, ?, ?)")
+    sqlx::query("INSERT INTO cat_event_history (channel_id, event_kind, theme, started_at) VALUES (?, ?, ?, ?)")
         .bind(channel_id)
         .bind(event_kind)
         .bind(theme)
+        .bind(paris_now_naive())
         .execute(pool)
         .await?;
     Ok(())

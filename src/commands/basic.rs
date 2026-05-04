@@ -4,11 +4,12 @@ use serenity::prelude::*;
 use tracing::error;
 
 use crate::database::{get_user_by_discord_id, new_token, DatabasePool};
+use crate::time::paris_now;
 
 #[command]
 #[description = "Affiche la liste des commandes disponibles"]
 pub async fn help(ctx: &Context, msg: &Message) -> CommandResult {
-    let commands_basic = "`help`, `serverinfo`, `link`, `jeux`";
+    let commands_basic = "`help`, `serverinfo`, `link`, `jeux`, `heure`";
     let commands_profile = "`np`, `score`";
     let commands_games = "`juste`, `bj`, `usd`";
     let commands_spam = "`rp`, `rpt`";
@@ -31,6 +32,22 @@ pub async fn help(ctx: &Context, msg: &Message) -> CommandResult {
         })
     }).await {
         error!("Erreur lors de l'envoi du message d'aide: {:?}", why);
+    }
+
+    Ok(())
+}
+
+#[command]
+#[description = "Affiche l'heure actuelle du bot"]
+pub async fn heure(ctx: &Context, msg: &Message) -> CommandResult {
+    let now = paris_now();
+    let response = format!(
+        "Il est **{}** à Paris.",
+        now.format("%H:%M:%S - %d/%m/%Y")
+    );
+
+    if let Err(why) = msg.channel_id.say(&ctx.http, response).await {
+        error!("Erreur lors de l'envoi de l'heure: {:?}", why);
     }
 
     Ok(())

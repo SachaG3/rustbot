@@ -2,6 +2,7 @@ mod cat_checkup;
 mod commands;
 mod database;
 mod events;
+mod time;
 mod utils;
 
 use serenity::client::bridge::gateway::ShardManager;
@@ -37,6 +38,7 @@ impl TypeMapKey for ShardManagerContainer {
 #[group]
 #[commands(
     help,
+    heure,
     serverinfo,
     link,
     jeux,
@@ -63,7 +65,8 @@ impl TypeMapKey for ShardManagerContainer {
     catstats,
     catevents,
     caliner,
-    adopter
+    adopter,
+    catcontrol
 )]
 struct General;
 

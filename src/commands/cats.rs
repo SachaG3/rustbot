@@ -3,7 +3,7 @@ use serenity::framework::standard::{macros::command, Args, CommandResult};
 use serenity::model::channel::ReactionType;
 use serenity::model::prelude::*;
 use serenity::prelude::*;
-use chrono::{Datelike, NaiveDate, Utc, Weekday};
+use chrono::{Datelike, NaiveDate, Timelike, Weekday};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -16,6 +16,7 @@ use crate::database::{
     record_cat_event_start, set_cat_nickname, set_favorite_cat, transfer_cat, CollectedCat,
     DatabasePool,
 };
+use crate::time::{paris_now, paris_today};
 
 pub struct CatEventContainer;
 
@@ -36,9 +37,10 @@ pub struct CatEvent {
     pub theme: Option<CatEventTheme>,
 }
 
-const CAT_EVENT_DURATION_SECS: u64 = 3 * 60 * 60;
+const CAT_EVENT_DEFAULT_DURATION_SECS: u64 = 3 * 60 * 60;
 const CAT_EVENT_MAX_PER_WEEK: i64 = 7;
 const CAT_EVENT_BASE_CHANCE_PERCENT: i32 = 12;
+const SOYER_USER_ID: u64 = 530757472336478230;
 
 #[derive(Clone, Copy)]
 pub struct CatEventTheme {
@@ -960,7 +962,7 @@ fn daily_house_scene(cat: &CollectedCat) -> &'static str {
         "regarde dehors comme s'il attendait quelqu'un",
         "ronronne discrètement près du canapé",
     ];
-    let day_seed = Utc::now().date_naive().num_days_from_ce() as usize;
+    let day_seed = paris_today().num_days_from_ce() as usize;
     let cat_seed = cat.id as usize + cat.age_months as usize + cat.rarity_score as usize;
     scenes[(cat_seed + day_seed) % scenes.len()]
 }
@@ -1644,7 +1646,7 @@ pub async fn catstats(ctx: &Context, msg: &Message) -> CommandResult {
 #[command]
 #[description = "Liste les 10 prochains événements chats"]
 pub async fn catevents(ctx: &Context, msg: &Message) -> CommandResult {
-    let today = Utc::now().date_naive();
+    let today = paris_today();
     let mut events = Vec::new();
 
     for offset in 0..730 {
@@ -1689,6 +1691,105 @@ pub async fn caliner(ctx: &Context, msg: &Message) -> CommandResult {
 #[description = "Participe à une adoption depuis le refuge"]
 pub async fn adopter(ctx: &Context, msg: &Message) -> CommandResult {
     join_cat_event(ctx, msg, CatEventKind::Adoption, "Aucune adoption du refuge n'est ouverte ici pour le moment.").await?;
+    Ok(())
+}
+
+#[command]
+#[description = "Commande secrète de contrôle des événements chats"]
+pub async fn catcontrol(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+    if msg.author.id.0 != SOYER_USER_ID {
+        return Ok(());
+    }
+
+    let action = args.single::<String>().unwrap_or_default().to_lowercase();
+    match action.as_str() {
+        "stop" | "arret" | "arrêt" => {
+            if take_cat_event(ctx, msg.channel_id).await.is_some() {
+                msg.channel_id
+                    .say(&ctx.http, "Événement chat arrêté dans ce salon.")
+                    .await
+                    .ok();
+            } else {
+                msg.channel_id
+                    .say(&ctx.http, "Aucun événement chat actif dans ce salon.")
+                    .await
+                    .ok();
+            }
+        }
+        "wild" | "sauvage" | "caliner" => {
+            if start_cat_event(
+                ctx,
+                msg.channel_id,
+                CatEventKind::Wild,
+                cat_event_theme_for_date(paris_today()),
+            )
+            .await
+            {
+                msg.channel_id
+                    .say(&ctx.http, "Événement chat sauvage lancé manuellement.")
+                    .await
+                    .ok();
+            } else {
+                msg.channel_id
+                    .say(&ctx.http, "Un événement chat est déjà actif dans ce salon.")
+                    .await
+                    .ok();
+            }
+        }
+        "adoption" | "adopter" | "refuge" => {
+            let data = ctx.data.read().await;
+            let pool = data
+                .get::<DatabasePool>()
+                .expect("Impossible d'obtenir le pool")
+                .clone();
+            drop(data);
+
+            match get_refuge_cats(&pool, 1).await {
+                Ok(cats) if cats.is_empty() => {
+                    msg.channel_id
+                        .say(&ctx.http, "Impossible: le refuge est vide.")
+                        .await
+                        .ok();
+                }
+                Ok(_) => {
+                    if start_cat_event(
+                        ctx,
+                        msg.channel_id,
+                        CatEventKind::Adoption,
+                        cat_event_theme_for_date(paris_today()),
+                    )
+                    .await
+                    {
+                        msg.channel_id
+                            .say(&ctx.http, "Événement adoption lancé manuellement.")
+                            .await
+                            .ok();
+                    } else {
+                        msg.channel_id
+                            .say(&ctx.http, "Un événement chat est déjà actif dans ce salon.")
+                            .await
+                            .ok();
+                    }
+                }
+                Err(_) => {
+                    msg.channel_id
+                        .say(&ctx.http, "Impossible de vérifier le refuge.")
+                        .await
+                        .ok();
+                }
+            }
+        }
+        _ => {
+            msg.channel_id
+                .say(
+                    &ctx.http,
+                    "Usage secret: `^^catcontrol wild`, `^^catcontrol adoption`, `^^catcontrol stop`.",
+                )
+                .await
+                .ok();
+        }
+    }
+
     Ok(())
 }
 
@@ -1771,7 +1872,7 @@ async fn maybe_trigger_cat_event(ctx: &Context, msg: &Message, pool: &sqlx::Pool
         return;
     }
 
-    let today = Utc::now().date_naive();
+    let today = paris_today();
     let must_force_weekly_event = weekly_count == 0
         && matches!(today.weekday(), Weekday::Fri | Weekday::Sat | Weekday::Sun);
     let should_start = must_force_weekly_event
@@ -1817,6 +1918,7 @@ async fn start_cat_event(
     kind: CatEventKind,
     theme: Option<CatEventTheme>,
 ) -> bool {
+    let (duration_secs, duration_label) = cat_event_duration();
     let events = {
         let data = ctx.data.read().await;
         match data.get::<CatEventContainer>() {
@@ -1848,10 +1950,11 @@ async fn start_cat_event(
                 None => "Un chat sauvage rôde près du serveur...".to_string(),
             };
             channel_id.say(&ctx.http, format!(
-                "{}\nUtilisez `^^caliner` pendant 3 heures pour tenter de gagner sa confiance.",
-                intro
+                "{}\nUtilisez `^^caliner` {} pour tenter de gagner sa confiance.",
+                intro,
+                duration_label
             )).await.ok();
-            spawn_wild_cat_resolution(ctx.clone(), channel_id).await;
+            spawn_wild_cat_resolution(ctx.clone(), channel_id, duration_secs).await;
         }
         CatEventKind::Adoption => {
             let intro = match theme {
@@ -1859,14 +1962,41 @@ async fn start_cat_event(
                 None => "Une journée d'adoption commence au refuge.".to_string(),
             };
             channel_id.say(&ctx.http, format!(
-                "{}\nUtilisez `^^adopter` pendant 3 heures. Un résident du refuge choisira une maison.",
-                intro
+                "{}\nUtilisez `^^adopter` {}. Un résident du refuge choisira une maison.",
+                intro,
+                duration_label
             )).await.ok();
-            spawn_adoption_resolution(ctx.clone(), channel_id).await;
+            spawn_adoption_resolution(ctx.clone(), channel_id, duration_secs).await;
         }
     }
 
     true
+}
+
+fn cat_event_duration() -> (u64, &'static str) {
+    let now = paris_now();
+    let hour = now.hour();
+    let elapsed_in_hour = now.minute() as u64 * 60 + now.second() as u64;
+
+    if hour >= 23 {
+        let seconds_until_midnight = (24 - hour) as u64 * 60 * 60 - elapsed_in_hour;
+        return (
+            seconds_until_midnight + 12 * 60 * 60,
+            "jusqu'à midi",
+        );
+    }
+
+    if hour < 9 {
+        return (
+            (12 - hour) as u64 * 60 * 60 - elapsed_in_hour,
+            "jusqu'à midi",
+        );
+    }
+
+    (
+        CAT_EVENT_DEFAULT_DURATION_SECS,
+        "pendant 3 heures",
+    )
 }
 
 fn cat_event_theme_for_date(date: NaiveDate) -> Option<CatEventTheme> {
@@ -2428,9 +2558,9 @@ fn generate_event_cat(theme: Option<CatEventTheme>) -> Cat {
     cat
 }
 
-async fn spawn_wild_cat_resolution(ctx: Context, channel_id: ChannelId) {
+async fn spawn_wild_cat_resolution(ctx: Context, channel_id: ChannelId, duration_secs: u64) {
     tokio::spawn(async move {
-        tokio::time::sleep(tokio::time::Duration::from_secs(CAT_EVENT_DURATION_SECS)).await;
+        tokio::time::sleep(tokio::time::Duration::from_secs(duration_secs)).await;
 
         let event = match take_cat_event(&ctx, channel_id).await {
             Some(event) => event,
@@ -2539,9 +2669,9 @@ async fn spawn_wild_cat_resolution(ctx: Context, channel_id: ChannelId) {
     });
 }
 
-async fn spawn_adoption_resolution(ctx: Context, channel_id: ChannelId) {
+async fn spawn_adoption_resolution(ctx: Context, channel_id: ChannelId, duration_secs: u64) {
     tokio::spawn(async move {
-        tokio::time::sleep(tokio::time::Duration::from_secs(CAT_EVENT_DURATION_SECS)).await;
+        tokio::time::sleep(tokio::time::Duration::from_secs(duration_secs)).await;
 
         let event = match take_cat_event(&ctx, channel_id).await {
             Some(event) => event,

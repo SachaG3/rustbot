@@ -1,9 +1,9 @@
 use serenity::prelude::*;
 use serenity::model::id::ChannelId;
 use serenity::model::channel::Message;
-use chrono::{DateTime, Utc, Datelike, Timelike, NaiveDate};
+use chrono::{DateTime, Utc};
+use chrono_tz::Europe::Paris;
 use rand::{thread_rng, Rng};
-use sqlx::{Pool, MySql};
 
 use crate::database::{
     DatabasePool, get_user_by_discord_id, new_user,
@@ -11,6 +11,7 @@ use crate::database::{
     add_collected_cat_with_date, get_daily_cat_count
 };
 use crate::commands::cats::{Cat, get_rarity_emoji};
+use crate::time::{paris_date_days_ago, paris_day_bounds_utc};
 
 const DISCORD_EPOCH: i64 = 1420070400000;
 const MAX_MESSAGES_PER_DAY: usize = 1000;
@@ -34,27 +35,14 @@ fn build_snowflake_boundary(date: DateTime<Utc>, is_before: bool) -> u64 {
     }
 }
 
-// Récupère les bounds (début et fin) d'une journée
+// Récupère les bounds d'une journée Paris, convertis en UTC pour les snowflakes Discord.
 fn get_day_bounds(days_ago: i64) -> (DateTime<Utc>, DateTime<Utc>) {
-    let now = Utc::now();
-    let start = now
-        .date_naive()
-        .and_hms_opt(0, 0, 0)
-        .unwrap()
-        - chrono::Duration::days(days_ago);
-    let end = start + chrono::Duration::days(1) - chrono::Duration::seconds(1);
-
-    (
-        DateTime::from_naive_utc_and_offset(start, Utc),
-        DateTime::from_naive_utc_and_offset(end, Utc),
-    )
+    paris_day_bounds_utc(days_ago)
 }
 
-// Récupère la date locale au format YYYY-MM-DD
+// Récupère la date Paris au format YYYY-MM-DD
 fn get_local_date(days_ago: i64) -> String {
-    let now = Utc::now();
-    let date = now.date_naive() - chrono::Duration::days(days_ago);
-    date.format("%Y-%m-%d").to_string()
+    paris_date_days_ago(days_ago).format("%Y-%m-%d").to_string()
 }
 
 pub async fn perform_cat_checkup(ctx: &Context) {
@@ -148,7 +136,11 @@ pub async fn perform_cat_checkup(ctx: &Context) {
                 }
                 Ok(false) => {
                     // Attribuer le daily cat
-                    let timestamp = message.timestamp.format("%Y-%m-%d %H:%M:%S").to_string();
+                    let timestamp = message
+                        .timestamp
+                        .with_timezone(&Paris)
+                        .format("%Y-%m-%d %H:%M:%S")
+                        .to_string();
 
                     match add_daily_cat_with_date(&pool, user.id, &timestamp).await {
                         Ok(_) => {
