@@ -41,6 +41,7 @@ const CAT_EVENT_DEFAULT_DURATION_SECS: u64 = 3 * 60 * 60;
 const CAT_EVENT_MAX_PER_WEEK: i64 = 7;
 const CAT_EVENT_BASE_CHANCE_PERCENT: i32 = 12;
 const SOYER_USER_ID: u64 = 530757472336478230;
+const CAT_EVENT_ROLE_MENTION: &str = "<@&1500871713381159125>";
 
 #[derive(Clone, Copy)]
 pub struct CatEventTheme {
@@ -1950,7 +1951,8 @@ async fn start_cat_event(
                 None => "Un chat sauvage rôde près du serveur...".to_string(),
             };
             channel_id.say(&ctx.http, format!(
-                "{}\nUtilisez `^^caliner` {} pour tenter de gagner sa confiance.",
+                "{}\n{}\nUtilisez `^^caliner` {} pour tenter de gagner sa confiance.",
+                CAT_EVENT_ROLE_MENTION,
                 intro,
                 duration_label
             )).await.ok();
@@ -1962,7 +1964,8 @@ async fn start_cat_event(
                 None => "Une journée d'adoption commence au refuge.".to_string(),
             };
             channel_id.say(&ctx.http, format!(
-                "{}\nUtilisez `^^adopter` {}. Un résident du refuge choisira une maison.",
+                "{}\n{}\nUtilisez `^^adopter` {}. Un résident du refuge choisira une maison.",
+                CAT_EVENT_ROLE_MENTION,
                 intro,
                 duration_label
             )).await.ok();
