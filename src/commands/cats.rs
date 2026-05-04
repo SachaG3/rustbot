@@ -3,20 +3,21 @@ use serenity::framework::standard::{macros::command, Args, CommandResult};
 use serenity::model::channel::ReactionType;
 use serenity::model::prelude::*;
 use serenity::prelude::*;
-use chrono::{Datelike, NaiveDate, Timelike, Weekday};
+use chrono::{Datelike, NaiveDate, NaiveDateTime, Timelike, Weekday};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::database::{
-    add_collected_cat, add_daily_cat, get_cat_by_id, get_cat_memories,
-    get_cat_event_count_last_7_days, get_cat_server_stats, get_daily_cat_count,
-    get_daily_cat_count_today, get_refuge_cats, get_user_by_discord_id, get_user_cat_counts,
-    get_user_cats, give_refuge_cat_to_user, has_daily_cat_today, move_cat_to_refuge, new_user,
-    record_cat_event_start, set_cat_nickname, set_favorite_cat, transfer_cat, CollectedCat,
+    add_cat_event_participant, add_collected_cat, add_daily_cat, delete_active_cat_event,
+    get_active_cat_events, get_cat_by_id, get_cat_event_count_last_7_days, get_cat_memories,
+    get_cat_server_stats, get_daily_cat_count, get_daily_cat_count_today, get_refuge_cats,
+    get_user_by_discord_id, get_user_cat_counts, get_user_cats, give_refuge_cat_to_user,
+    has_daily_cat_today, move_cat_to_refuge, new_user, record_cat_event_start,
+    save_active_cat_event, set_cat_nickname, set_favorite_cat, transfer_cat, CollectedCat,
     DatabasePool,
 };
-use crate::time::{paris_now, paris_today};
+use crate::time::{paris_now, paris_now_naive, paris_today};
 
 pub struct CatEventContainer;
 
@@ -1800,6 +1801,10 @@ async fn join_cat_event(
     kind: CatEventKind,
     no_event_message: &str,
 ) -> CommandResult {
+    let pool = {
+        let data = ctx.data.read().await;
+        data.get::<DatabasePool>().cloned()
+    };
     let events = {
         let data = ctx.data.read().await;
         data.get::<CatEventContainer>()
@@ -1829,7 +1834,18 @@ async fn join_cat_event(
         }
 
         let inserted = event.participants.insert(msg.author.id);
-        let action = match event.kind {
+        let event_kind = event.kind;
+        drop(events);
+
+        if inserted {
+            if let Some(pool) = pool {
+                add_cat_event_participant(&pool, channel_key, msg.author.id.0)
+                    .await
+                    .ok();
+            }
+        }
+
+        let action = match event_kind {
             CatEventKind::Wild => "tente de rassurer le chat sauvage",
             CatEventKind::Adoption => "visite le refuge avec douceur",
         };
@@ -1850,13 +1866,26 @@ async fn join_cat_event(
 }
 
 async fn take_cat_event(ctx: &Context, channel_id: ChannelId) -> Option<CatEvent> {
+    let pool = {
+        let data = ctx.data.read().await;
+        data.get::<DatabasePool>().cloned()
+    };
     let events = {
         let data = ctx.data.read().await;
         data.get::<CatEventContainer>()?.clone()
     };
 
     let mut events = events.lock().await;
-    events.remove(&channel_id.0)
+    let event = events.remove(&channel_id.0);
+    drop(events);
+
+    if event.is_some() {
+        if let Some(pool) = pool {
+            delete_active_cat_event(&pool, channel_id.0).await.ok();
+        }
+    }
+
+    event
 }
 
 async fn maybe_trigger_cat_event(ctx: &Context, msg: &Message, pool: &sqlx::Pool<sqlx::MySql>) {
@@ -1892,11 +1921,7 @@ async fn maybe_trigger_cat_event(ctx: &Context, msg: &Message, pool: &sqlx::Pool
     };
 
     if start_cat_event(ctx, msg.channel_id, kind, theme).await {
-        let event_kind = match kind {
-            CatEventKind::Wild => "wild",
-            CatEventKind::Adoption => "adoption",
-        };
-        record_cat_event_start(pool, msg.channel_id.0, event_kind, theme.map(|theme| theme.key)).await.ok();
+        record_cat_event_start(pool, msg.channel_id.0, cat_event_kind_key(kind), theme.map(|theme| theme.key)).await.ok();
     }
 }
 
@@ -1913,6 +1938,21 @@ async fn channel_has_cat_event(ctx: &Context, channel_id: ChannelId) -> bool {
     events.contains_key(&channel_id.0)
 }
 
+fn cat_event_kind_key(kind: CatEventKind) -> &'static str {
+    match kind {
+        CatEventKind::Wild => "wild",
+        CatEventKind::Adoption => "adoption",
+    }
+}
+
+fn cat_event_kind_from_key(key: &str) -> Option<CatEventKind> {
+    match key {
+        "wild" => Some(CatEventKind::Wild),
+        "adoption" => Some(CatEventKind::Adoption),
+        _ => None,
+    }
+}
+
 async fn start_cat_event(
     ctx: &Context,
     channel_id: ChannelId,
@@ -1920,6 +1960,11 @@ async fn start_cat_event(
     theme: Option<CatEventTheme>,
 ) -> bool {
     let (duration_secs, duration_label) = cat_event_duration();
+    let ends_at = paris_now_naive() + chrono::Duration::seconds(duration_secs as i64);
+    let pool = {
+        let data = ctx.data.read().await;
+        data.get::<DatabasePool>().cloned()
+    };
     let events = {
         let data = ctx.data.read().await;
         match data.get::<CatEventContainer>() {
@@ -1942,6 +1987,23 @@ async fn start_cat_event(
                 theme,
             },
         );
+    }
+
+    if let Some(pool) = pool {
+        let event_kind = cat_event_kind_key(kind);
+        if save_active_cat_event(
+            &pool,
+            channel_id.0,
+            event_kind,
+            theme.map(|theme| theme.key),
+            ends_at,
+        )
+        .await
+        .is_err()
+        {
+            take_cat_event(ctx, channel_id).await;
+            return false;
+        }
     }
 
     match kind {
@@ -1974,6 +2036,76 @@ async fn start_cat_event(
     }
 
     true
+}
+
+pub async fn restore_cat_events(ctx: &Context) {
+    let pool = {
+        let data = ctx.data.read().await;
+        match data.get::<DatabasePool>() {
+            Some(pool) => pool.clone(),
+            None => return,
+        }
+    };
+    let stored_events = match get_active_cat_events(&pool).await {
+        Ok(events) => events,
+        Err(_) => return,
+    };
+    let events = {
+        let data = ctx.data.read().await;
+        match data.get::<CatEventContainer>() {
+            Some(events) => events.clone(),
+            None => return,
+        }
+    };
+
+    for stored in stored_events {
+        let kind = match cat_event_kind_from_key(&stored.event_kind) {
+            Some(kind) => kind,
+            None => {
+                delete_active_cat_event(&pool, stored.channel_id).await.ok();
+                continue;
+            }
+        };
+        let duration_secs = remaining_cat_event_seconds(stored.ends_at);
+        let channel_id = ChannelId(stored.channel_id);
+        let theme = stored
+            .theme
+            .as_deref()
+            .and_then(cat_event_theme_by_key);
+        let participants = stored.participants.into_iter().map(UserId).collect();
+
+        {
+            let mut events = events.lock().await;
+            if events.contains_key(&stored.channel_id) {
+                continue;
+            }
+
+            events.insert(
+                stored.channel_id,
+                CatEvent {
+                    kind,
+                    participants,
+                    theme,
+                },
+            );
+        }
+
+        spawn_cat_event_resolution(ctx.clone(), channel_id, kind, duration_secs).await;
+    }
+}
+
+fn remaining_cat_event_seconds(ends_at: NaiveDateTime) -> u64 {
+    ends_at
+        .signed_duration_since(paris_now_naive())
+        .num_seconds()
+        .max(0) as u64
+}
+
+async fn spawn_cat_event_resolution(ctx: Context, channel_id: ChannelId, kind: CatEventKind, duration_secs: u64) {
+    match kind {
+        CatEventKind::Wild => spawn_wild_cat_resolution(ctx, channel_id, duration_secs).await,
+        CatEventKind::Adoption => spawn_adoption_resolution(ctx, channel_id, duration_secs).await,
+    }
 }
 
 fn cat_event_duration() -> (u64, &'static str) {
@@ -2415,6 +2547,24 @@ fn cat_event_theme_for_date(date: NaiveDate) -> Option<CatEventTheme> {
     } else {
         None
     }
+}
+
+fn cat_event_theme_by_key(key: &str) -> Option<CatEventTheme> {
+    let current_year = paris_today().year();
+
+    for year in (current_year - 2)..=(current_year + 2) {
+        let mut date = NaiveDate::from_ymd_opt(year, 1, 1)?;
+        while date.year() == year {
+            if let Some(theme) = cat_event_theme_for_date(date) {
+                if theme.key == key {
+                    return Some(theme);
+                }
+            }
+            date += chrono::Duration::days(1);
+        }
+    }
+
+    None
 }
 
 fn cat_event_label(key: &str) -> &'static str {

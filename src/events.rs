@@ -12,6 +12,7 @@ use sqlx::{MySql, Pool};
 
 use crate::database::{DatabasePool, add_log, get_user_by_discord_id, new_user, get_guild, add_guild, add_user_to_guild, new_message, new_message_delete, new_message_edit};
 use crate::cat_checkup::perform_cat_checkup;
+use crate::commands::cats::restore_cat_events;
 
 pub struct Handler;
 
@@ -28,6 +29,8 @@ impl EventHandler for Handler {
         if let Err(e) = add_log(&pool, "Bot Status", "Le bot est connecté et prêt.").await {
             error!("Erreur lors de l'ajout d'un log: {:?}", e);
         }
+
+        restore_cat_events(&ctx).await;
 
         // Lancer le cat checkup après un délai de 5 secondes
         let ctx_clone = ctx.clone();
@@ -294,4 +297,4 @@ async fn handle_new_member(pool: &Pool<MySql>, member: &Member, guild_id: u64) {
         },
         Err(e) => error!("Erreur lors de la recherche de l'utilisateur: {:?}", e),
     }
-} 
+}

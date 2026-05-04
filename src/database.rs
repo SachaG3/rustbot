@@ -47,6 +47,22 @@ pub async fn ensure_cat_schema(pool: &Pool<MySql>) -> Result<(), Error> {
             PRIMARY KEY (id),
             KEY idx_started_at (started_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        "CREATE TABLE IF NOT EXISTS cat_active_events (
+            channel_id bigint(20) UNSIGNED NOT NULL,
+            event_kind varchar(30) NOT NULL,
+            theme varchar(80) DEFAULT NULL,
+            started_at datetime NOT NULL,
+            ends_at datetime NOT NULL,
+            PRIMARY KEY (channel_id),
+            KEY idx_ends_at (ends_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+        "CREATE TABLE IF NOT EXISTS cat_event_participants (
+            channel_id bigint(20) UNSIGNED NOT NULL,
+            user_id bigint(20) UNSIGNED NOT NULL,
+            joined_at datetime NOT NULL,
+            PRIMARY KEY (channel_id, user_id),
+            KEY idx_channel_id (channel_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
     ];
 
     for statement in statements {
@@ -769,6 +785,98 @@ pub async fn record_cat_event_start(
         .execute(pool)
         .await?;
     Ok(())
+}
+
+#[derive(Debug, Clone)]
+pub struct StoredCatEvent {
+    pub channel_id: u64,
+    pub event_kind: String,
+    pub theme: Option<String>,
+    pub ends_at: chrono::NaiveDateTime,
+    pub participants: Vec<u64>,
+}
+
+pub async fn save_active_cat_event(
+    pool: &Pool<MySql>,
+    channel_id: u64,
+    event_kind: &str,
+    theme: Option<&str>,
+    ends_at: chrono::NaiveDateTime,
+) -> Result<(), Error> {
+    sqlx::query(
+        "INSERT INTO cat_active_events (channel_id, event_kind, theme, started_at, ends_at)
+         VALUES (?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE event_kind = VALUES(event_kind), theme = VALUES(theme), started_at = VALUES(started_at), ends_at = VALUES(ends_at)",
+    )
+    .bind(channel_id)
+    .bind(event_kind)
+    .bind(theme)
+    .bind(paris_now_naive())
+    .bind(ends_at)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+pub async fn add_cat_event_participant(
+    pool: &Pool<MySql>,
+    channel_id: u64,
+    user_id: u64,
+) -> Result<bool, Error> {
+    let result = sqlx::query(
+        "INSERT IGNORE INTO cat_event_participants (channel_id, user_id, joined_at) VALUES (?, ?, ?)",
+    )
+    .bind(channel_id)
+    .bind(user_id)
+    .bind(paris_now_naive())
+    .execute(pool)
+    .await?;
+    Ok(result.rows_affected() > 0)
+}
+
+pub async fn delete_active_cat_event(pool: &Pool<MySql>, channel_id: u64) -> Result<(), Error> {
+    sqlx::query("DELETE FROM cat_event_participants WHERE channel_id = ?")
+        .bind(channel_id)
+        .execute(pool)
+        .await?;
+
+    sqlx::query("DELETE FROM cat_active_events WHERE channel_id = ?")
+        .bind(channel_id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+pub async fn get_active_cat_events(pool: &Pool<MySql>) -> Result<Vec<StoredCatEvent>, Error> {
+    let event_rows = sqlx::query(
+        "SELECT channel_id, event_kind, theme, ends_at FROM cat_active_events ORDER BY ends_at ASC",
+    )
+    .fetch_all(pool)
+    .await?;
+
+    let mut events = Vec::new();
+    for row in event_rows {
+        let channel_id: u64 = row.get("channel_id");
+        let participant_rows = sqlx::query(
+            "SELECT user_id FROM cat_event_participants WHERE channel_id = ? ORDER BY joined_at ASC",
+        )
+        .bind(channel_id)
+        .fetch_all(pool)
+        .await?;
+
+        events.push(StoredCatEvent {
+            channel_id,
+            event_kind: row.get("event_kind"),
+            theme: row.try_get::<Option<String>, _>("theme").unwrap_or(None),
+            ends_at: row.get("ends_at"),
+            participants: participant_rows
+                .into_iter()
+                .map(|participant| participant.get("user_id"))
+                .collect(),
+        });
+    }
+
+    Ok(events)
 }
 
 fn row_to_collected_cat(row: sqlx::mysql::MySqlRow) -> Result<CollectedCat, Error> {
