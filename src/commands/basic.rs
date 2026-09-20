@@ -15,6 +15,7 @@ pub async fn help(ctx: &Context, msg: &Message) -> CommandResult {
     let commands_spam = "`rp`, `rpt`";
     let commands_valorant = "`skin`, `rank`";
     let commands_cats = "`cat`, `cats`, `mycats`, `house`, `refuge`, `refuge_donner`, `surnom`, `favori`, `chat`, `visite`, `catstats`, `catevents`, `caliner`, `adopter`";
+    let commands_retention = "`missions`, `expedition`, `expeditions`, `retour`, `decorations`, `decorer`, `ranger`, `defi`, `participer_defi`, `hebdo`";
 
     if let Err(why) = msg.channel_id.send_message(&ctx.http, |m| {
         m.embed(|e| {
@@ -27,6 +28,7 @@ pub async fn help(ctx: &Context, msg: &Message) -> CommandResult {
              .field("Commandes de spam", commands_spam, false)
              .field("Commandes Valorant", commands_valorant, false)
              .field("Commandes chats", commands_cats, false)
+             .field("Vie de la maison et communauté", commands_retention, false)
              .footer(|f| f.text("Utilisez ^^help <commande> pour plus d'informations (bientôt disponible)"))
              .timestamp(chrono::Utc::now().to_rfc3339())
         })

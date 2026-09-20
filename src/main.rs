@@ -2,6 +2,7 @@ mod cat_checkup;
 mod commands;
 mod database;
 mod events;
+mod retention;
 mod time;
 mod utils;
 
@@ -28,6 +29,7 @@ use tracing::{error, info};
 use crate::commands::cats::CatEventContainer;
 use crate::database::{ensure_cat_schema, DatabasePool};
 use crate::events::Handler;
+use crate::retention::*;
 
 pub struct ShardManagerContainer;
 
@@ -66,7 +68,17 @@ impl TypeMapKey for ShardManagerContainer {
     catevents,
     caliner,
     adopter,
-    catcontrol
+    catcontrol,
+    missions,
+    expedition,
+    expeditions,
+    retour,
+    decorations,
+    decorer,
+    ranger,
+    defi,
+    participer_defi,
+    hebdo
 )]
 struct General;
 
@@ -137,6 +149,9 @@ async fn main() {
     ensure_cat_schema(&pool)
         .await
         .expect("Erreur lors de la mise à jour du schéma des chats");
+    ensure_retention_schema(&pool)
+        .await
+        .expect("Erreur lors de la mise à jour du schéma de rétention");
 
     // Configurer le framework de commandes
     let framework = StandardFramework::new()

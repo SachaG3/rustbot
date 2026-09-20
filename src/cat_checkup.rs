@@ -12,6 +12,7 @@ use crate::database::{
 };
 use crate::commands::cats::{Cat, get_rarity_emoji};
 use crate::time::{paris_date_days_ago, paris_day_bounds_utc};
+use crate::retention::record_activity;
 
 const DISCORD_EPOCH: i64 = 1420070400000;
 const MAX_MESSAGES_PER_DAY: usize = 1000;
@@ -87,11 +88,11 @@ pub async fn perform_cat_checkup(ctx: &Context) {
 
         println!("  📝 {} messages récupérés pour le {}", messages.len(), date_to_check);
 
-        // Filtrer les messages contenant ^^cat
+        // Filtrer uniquement la commande ^^cat exacte.
         let cat_messages: Vec<&Message> = messages
             .iter()
             .filter(|msg| {
-                msg.content.to_lowercase().contains("^^cat") &&
+                msg.content.trim().eq_ignore_ascii_case("^^cat") &&
                 !msg.author.bot &&
                 msg.timestamp.timestamp() >= start_of_day.timestamp() &&
                 msg.timestamp.timestamp() <= end_of_day.timestamp()
@@ -145,6 +146,7 @@ pub async fn perform_cat_checkup(ctx: &Context) {
                     match add_daily_cat_with_date(&pool, user.id, &timestamp).await {
                         Ok(_) => {
                             total_cats_added += 1;
+                            record_activity(&pool, user.id, "daily_cat").await.ok();
 
                             // Compter le total de cats
                             let total_count = match get_daily_cat_count(&pool, user.id).await {

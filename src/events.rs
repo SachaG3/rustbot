@@ -13,6 +13,7 @@ use sqlx::{MySql, Pool};
 use crate::database::{DatabasePool, add_log, get_user_by_discord_id, new_user, get_guild, add_guild, add_user_to_guild, new_message, new_message_delete, new_message_edit};
 use crate::cat_checkup::perform_cat_checkup;
 use crate::commands::cats::restore_cat_events;
+use crate::retention::start_retention_scheduler;
 
 pub struct Handler;
 
@@ -31,6 +32,7 @@ impl EventHandler for Handler {
         }
 
         restore_cat_events(&ctx).await;
+        start_retention_scheduler(ctx.clone());
 
         // Lancer le cat checkup après un délai de 5 secondes
         let ctx_clone = ctx.clone();

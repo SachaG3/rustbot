@@ -18,6 +18,10 @@ use crate::database::{
     DatabasePool,
 };
 use crate::time::{paris_now, paris_now_naive, paris_today};
+use crate::retention::{
+    get_equipped_decorations, has_active_community_challenge, is_cat_on_expedition, record_activity,
+    record_daily_cat_and_roll_challenge,
+};
 
 pub struct CatEventContainer;
 
@@ -687,6 +691,7 @@ pub async fn cat(ctx: &Context, msg: &Message) -> CommandResult {
     }
 
     msg.channel_id.say(&ctx.http, response).await.ok();
+    record_daily_cat_and_roll_challenge(ctx, msg, &pool, user.id).await;
     if matches!(get_daily_cat_count_today(&pool).await, Ok(1)) {
         maybe_trigger_cat_event(ctx, msg, &pool).await;
     }
@@ -1144,6 +1149,17 @@ pub async fn trade(ctx: &Context, msg: &Message) -> CommandResult {
                 return Ok(());
             }
 
+            if is_cat_on_expedition(&pool, cat_id).await.unwrap_or(false) {
+                msg.channel_id
+                    .say(
+                        &ctx.http,
+                        "Ce chat est en promenade. Il pourra déménager après son retour sain et sauf.",
+                    )
+                    .await
+                    .ok();
+                return Ok(());
+            }
+
             // Récupérer l'utilisateur cible
             let target_user = match crate::commands::get_user_by_mention(ctx, msg, args[1]).await {
                 Ok(u) => u,
@@ -1277,6 +1293,9 @@ async fn show_house(ctx: &Context, msg: &Message, is_visit: bool) -> CommandResu
             total: 0,
         });
     let cats = get_user_cats(&pool, user.id).await.unwrap_or_default();
+    let decorations = get_equipped_decorations(&pool, user.id)
+        .await
+        .unwrap_or_default();
 
     let title = if is_visit && target.id != msg.author.id {
         format!("🏠 Visite chez {}", target.name)
@@ -1310,6 +1329,16 @@ async fn show_house(ctx: &Context, msg: &Message, is_visit: bool) -> CommandResu
                 "... et {} autres résidents se reposent dans la maison.\n",
                 cats.len() - 8
             );
+        }
+    }
+
+    if !decorations.is_empty() {
+        response += &format!("\n\n🪴 Décorations : {}", decorations.join(", "));
+    }
+
+    if is_visit && target.id != msg.author.id {
+        if let Ok(Some(visitor)) = get_user_by_discord_id(&pool, msg.author.id.0).await {
+            record_activity(&pool, visitor.id, "visit").await.ok();
         }
     }
 
@@ -1403,6 +1432,17 @@ pub async fn refuge_donner(ctx: &Context, msg: &Message, mut args: Args) -> Comm
             return Ok(());
         }
     };
+
+    if is_cat_on_expedition(&pool, cat_id).await.unwrap_or(false) {
+        msg.channel_id
+            .say(
+                &ctx.http,
+                "Ce chat est en promenade. Il pourra rejoindre le refuge après son retour sain et sauf.",
+            )
+            .await
+            .ok();
+        return Ok(());
+    }
 
     if move_cat_to_refuge(&pool, cat_id, user.id).await.is_err() {
         msg.channel_id
@@ -1889,6 +1929,9 @@ async fn take_cat_event(ctx: &Context, channel_id: ChannelId) -> Option<CatEvent
 }
 
 async fn maybe_trigger_cat_event(ctx: &Context, msg: &Message, pool: &sqlx::Pool<sqlx::MySql>) {
+    if has_active_community_challenge(pool).await {
+        return;
+    }
     if channel_has_cat_event(ctx, msg.channel_id).await {
         return;
     }

@@ -78,6 +78,22 @@ Toutes les commandes commencent par le préfixe `^^` :
 - `^^rp` - Répète un message plusieurs fois
 - `^^rpt` - Répète un message plusieurs fois avec TTS
 
+### Vie de la maison et communauté
+
+- `^^missions` - Affiche les missions hebdomadaires sans série punitive
+- `^^expedition <id> <courte|moyenne|longue>` - Envoie un chat en promenade sans danger
+- `^^expeditions` - Affiche les promenades en cours
+- `^^retour <id>` - Accueille un chat revenu sain et sauf
+- `^^decorations` - Affiche les décorations débloquées
+- `^^decorer <clé>` / `^^ranger <clé>` - Personnalise la maison
+- `^^defi` - Affiche le défi communautaire en cours
+- `^^participer_defi <id>` - Participe avec un chat, sans risque pour lui
+- `^^hebdo` - Affiche le résumé de la semaine
+
+Les défis apparaissent aléatoirement dans `CAT_CHANNEL_ID`. Ils comprennent le chien turbulent, mais aussi des activités coopératives comme le carton géant, l'orage solidaire, la pelote géante et le pique-nique. Une issue insuffisante met toujours les chats à l'abri : aucun chat ne peut être blessé, perdu ou retiré à son propriétaire.
+
+Le dimanche après 20 h (heure de Paris), le bot publie une fois le classement des personnes les plus régulières sur `^^cat`, puis tous les chats de collection apparus pendant la semaine.
+
 ## Contribution
 
 Les contributions sont les bienvenues ! N'hésitez pas à soumettre des issues ou des pull requests.
