@@ -27,6 +27,9 @@ DB_PASSWORD=votre_mot_de_passe
 DB_DATABASE=votre_base_de_donnees
 DB_PORT=3306
 OWNER_ID=votre_id_discord
+CAT_CHANNEL_ID=id_du_salon_des_chats        # facultatif
+CAT_ADMIN_ID=id_autorise_a_catcontrol       # facultatif
+CAT_EVENT_ROLE_ID=id_du_role_des_evenements # facultatif
 ```
 
 2. Assurez-vous que votre base de données MySQL est configurée avec les tables nécessaires.

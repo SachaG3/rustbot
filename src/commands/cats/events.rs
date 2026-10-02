@@ -43,8 +43,26 @@ pub struct CatEvent {
 pub(super) const CAT_EVENT_DEFAULT_DURATION_SECS: u64 = 3 * 60 * 60;
 pub(super) const CAT_EVENT_MAX_PER_WEEK: i64 = 7;
 pub(super) const CAT_EVENT_BASE_CHANCE_PERCENT: i32 = 12;
-pub(super) const SOYER_USER_ID: u64 = 530757472336478230;
-pub(super) const CAT_EVENT_ROLE_MENTION: &str = "<@&1500871713381159125>";
+const DEFAULT_CAT_ADMIN_ID: u64 = 530757472336478230;
+const DEFAULT_CAT_EVENT_ROLE_ID: u64 = 1500871713381159125;
+
+/// Lit un identifiant Discord dans l'environnement, avec une valeur par défaut.
+fn env_id(key: &str, default: u64) -> u64 {
+    std::env::var(key)
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .unwrap_or(default)
+}
+
+/// Seul utilisateur autorisé à utiliser `catcontrol`.
+fn cat_admin_id() -> u64 {
+    env_id("CAT_ADMIN_ID", DEFAULT_CAT_ADMIN_ID)
+}
+
+/// Mention du rôle prévenu au début de chaque événement.
+fn cat_event_role_mention() -> String {
+    format!("<@&{}>", env_id("CAT_EVENT_ROLE_ID", DEFAULT_CAT_EVENT_ROLE_ID))
+}
 
 #[derive(Clone, Copy)]
 pub struct CatEventTheme {
@@ -56,7 +74,6 @@ pub struct CatEventTheme {
     pub colors: &'static [&'static str],
     pub rarity_bonus: i32,
 }
-
 
 #[command]
 #[description = "Liste les 10 prochains événements chats"]
@@ -112,7 +129,7 @@ pub async fn adopter(ctx: &Context, msg: &Message) -> CommandResult {
 #[command]
 #[description = "Commande secrète de contrôle des événements chats"]
 pub async fn catcontrol(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    if msg.author.id.0 != SOYER_USER_ID {
+    if msg.author.id.0 != cat_admin_id() {
         return Ok(());
     }
 
@@ -430,7 +447,7 @@ pub(super) async fn start_cat_event(
             };
             channel_id.say(&ctx.http, format!(
                 "{}\n{}\nUtilisez `^^caliner` {} pour tenter de gagner sa confiance.",
-                CAT_EVENT_ROLE_MENTION,
+                cat_event_role_mention(),
                 intro,
                 duration_label
             )).await.ok();
@@ -443,7 +460,7 @@ pub(super) async fn start_cat_event(
             };
             channel_id.say(&ctx.http, format!(
                 "{}\n{}\nUtilisez `^^adopter` {}. Un résident du refuge choisira une maison.",
-                CAT_EVENT_ROLE_MENTION,
+                cat_event_role_mention(),
                 intro,
                 duration_label
             )).await.ok();
@@ -550,7 +567,6 @@ pub(super) fn cat_event_duration() -> (u64, &'static str) {
     )
 }
 
-
 pub(super) fn generate_event_cat(theme: Option<CatEventTheme>) -> Cat {
     let Some(theme) = theme else {
         return Cat::generate_random();
@@ -646,11 +662,7 @@ pub(super) async fn spawn_wild_cat_resolution(ctx: Context, channel_id: ChannelI
         match add_collected_cat(
             &pool,
             user.id,
-            &wild_cat.name,
-            wild_cat.breed.name,
-            wild_cat.color.name,
-            wild_cat.age_months,
-            wild_cat.rarity_score,
+            &wild_cat.as_new_cat(),
         )
         .await
         {

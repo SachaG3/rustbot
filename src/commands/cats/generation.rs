@@ -1,8 +1,8 @@
 //! Génération aléatoire des chats : races, couleurs, noms et rareté.
 
+use crate::database::NewCat;
+use super::display::format_age;
 use rand::{thread_rng, Rng};
-
-
 
 #[derive(Clone)]
 pub struct CatBreed {
@@ -26,6 +26,17 @@ pub struct Cat {
 }
 
 impl Cat {
+    /// Vue de ce chat prête à être enregistrée en base.
+    pub fn as_new_cat(&self) -> NewCat<'_> {
+        NewCat {
+            name: &self.name,
+            breed: self.breed.name,
+            color: self.color.name,
+            age_months: self.age_months,
+            rarity_score: self.rarity_score,
+        }
+    }
+
     pub fn calculate_rarity(&self) -> i32 {
         // Système de rareté revu pour avoir vraiment des scores bas
         let breed_bonus = self.breed.rarity_bonus;
@@ -102,22 +113,7 @@ impl Cat {
     }
 
     pub fn format_description(&self) -> String {
-        let age_display = if self.age_months <= 12 {
-            format!("{} mois", self.age_months)
-        } else {
-            let years = self.age_months / 12;
-            let months = self.age_months % 12;
-            if months == 0 {
-                format!("{} an{}", years, if years > 1 { "s" } else { "" })
-            } else {
-                format!(
-                    "{} an{} et {} mois",
-                    years,
-                    if years > 1 { "s" } else { "" },
-                    months
-                )
-            }
-        };
+        let age_display = format_age(self.age_months);
 
         format!(
             "{} {} {} de {}",
@@ -524,4 +520,18 @@ pub fn select_weighted_color(colors: &[CatColor], rng: &mut impl Rng) -> CatColo
 
     // Fallback
     colors[0].clone()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rarete_reste_entre_1_et_20() {
+        for _ in 0..1000 {
+            let cat = Cat::generate_random();
+            assert!((1..=20).contains(&cat.rarity_score), "{}", cat.rarity_score);
+            assert_eq!(cat.rarity_score, cat.calculate_rarity());
+        }
+    }
 }

@@ -350,68 +350,54 @@ pub struct CatMemory {
     pub created_at: chrono::NaiveDateTime,
 }
 
+/// Caractéristiques d'un chat à enregistrer dans la collection.
+pub struct NewCat<'a> {
+    pub name: &'a str,
+    pub breed: &'a str,
+    pub color: &'a str,
+    pub age_months: i32,
+    pub rarity_score: i32,
+}
+
 pub async fn add_collected_cat(
     pool: &Pool<MySql>,
     user_id: i64,
-    name: &str,
-    breed: &str,
-    color: &str,
-    age_months: i32,
-    rarity_score: i32,
+    cat: &NewCat<'_>,
 ) -> Result<i32, Error> {
-    let personality = random_cat_personality();
-    let mood = random_cat_mood();
-    let result = sqlx::query(
-        "INSERT INTO collected_cats (user_id, name, breed, color, age_months, rarity_score, obtained_at, personality, mood, location, original_owner_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'home', ?)"
-    )
-        .bind(user_id as i32)
-        .bind(name)
-        .bind(breed)
-        .bind(color)
-        .bind(age_months)
-        .bind(rarity_score)
-        .bind(paris_now_naive())
-        .bind(personality)
-        .bind(mood)
-        .bind(user_id as i32)
-        .execute(pool)
-        .await?;
-
-    let cat_id = result.last_insert_id() as i32;
-    add_cat_memory(
-        pool,
-        cat_id,
-        Some(user_id),
-        "arrival",
-        &format!("{} a rejoint son foyer.", name),
-    )
-    .await
-    .ok();
-
-    Ok(cat_id)
+    insert_collected_cat(pool, user_id, cat, paris_now_naive()).await
 }
 
+/// Variante de `add_collected_cat` avec une date d'obtention imposée
+/// (utilisée pour rattraper les chats quotidiens manqués).
 pub async fn add_collected_cat_with_date(
     pool: &Pool<MySql>,
     user_id: i64,
-    name: &str,
-    breed: &str,
-    color: &str,
-    age_months: i32,
-    rarity_score: i32,
+    cat: &NewCat<'_>,
     obtained_at: &str,
 ) -> Result<i32, Error> {
+    insert_collected_cat(pool, user_id, cat, obtained_at).await
+}
+
+async fn insert_collected_cat<'q, T>(
+    pool: &Pool<MySql>,
+    user_id: i64,
+    cat: &NewCat<'q>,
+    obtained_at: T,
+) -> Result<i32, Error>
+where
+    T: 'q + Send + sqlx::Encode<'q, MySql> + sqlx::Type<MySql>,
+{
     let personality = random_cat_personality();
     let mood = random_cat_mood();
     let result = sqlx::query(
         "INSERT INTO collected_cats (user_id, name, breed, color, age_months, rarity_score, obtained_at, personality, mood, location, original_owner_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'home', ?)"
     )
         .bind(user_id as i32)
-        .bind(name)
-        .bind(breed)
-        .bind(color)
-        .bind(age_months)
-        .bind(rarity_score)
+        .bind(cat.name)
+        .bind(cat.breed)
+        .bind(cat.color)
+        .bind(cat.age_months)
+        .bind(cat.rarity_score)
         .bind(obtained_at)
         .bind(personality)
         .bind(mood)
@@ -425,7 +411,7 @@ pub async fn add_collected_cat_with_date(
         cat_id,
         Some(user_id),
         "arrival",
-        &format!("{} a rejoint son foyer.", name),
+        &format!("{} a rejoint son foyer.", cat.name),
     )
     .await
     .ok();

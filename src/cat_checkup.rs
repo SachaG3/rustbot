@@ -177,12 +177,8 @@ pub async fn perform_cat_checkup(ctx: &Context) {
                                 match add_collected_cat_with_date(
                                     &pool,
                                     user.id,
-                                    &secret_cat.name,
-                                    secret_cat.breed.name,
-                                    secret_cat.color.name,
-                                    secret_cat.age_months,
-                                    secret_cat.rarity_score,
-                                    &timestamp
+                                    &secret_cat.as_new_cat(),
+                                    &timestamp,
                                 ).await {
                                     Ok(cat_id) => {
                                         total_special_cats_added += 1;

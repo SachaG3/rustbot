@@ -544,3 +544,42 @@ pub(super) fn last_weekday_of_month(year: i32, month: u32, weekday: Weekday) -> 
 
     date
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn date(year: i32, month: u32, day: u32) -> NaiveDate {
+        NaiveDate::from_ymd_opt(year, month, day).unwrap()
+    }
+
+    #[test]
+    fn paques_tombe_aux_dates_connues() {
+        assert_eq!(easter_sunday(2024), date(2024, 3, 31));
+        assert_eq!(easter_sunday(2025), date(2025, 4, 20));
+        assert_eq!(easter_sunday(2026), date(2026, 4, 5));
+    }
+
+    #[test]
+    fn fete_des_meres_est_le_dernier_dimanche_de_mai() {
+        assert_eq!(french_mothers_day(2025), date(2025, 5, 25));
+        assert_eq!(french_mothers_day(2026), date(2026, 5, 31));
+    }
+
+    #[test]
+    fn fete_des_meres_est_decalee_quand_elle_tombe_a_la_pentecote() {
+        // En 2004, la Pentecôte tombait le 30 mai.
+        assert_eq!(french_mothers_day(2004), date(2004, 6, 6));
+    }
+
+    #[test]
+    fn nieme_et_dernier_jour_de_la_semaine_du_mois() {
+        assert_eq!(nth_weekday_of_month(2026, 6, Weekday::Sun, 3), date(2026, 6, 21));
+        assert_eq!(last_weekday_of_month(2026, 12, Weekday::Thu), date(2026, 12, 31));
+    }
+
+    #[test]
+    fn theme_de_noel_actif_autour_du_25_decembre() {
+        assert_eq!(cat_event_theme_for_date(date(2026, 12, 25)).map(|t| t.key), Some("noel"));
+    }
+}

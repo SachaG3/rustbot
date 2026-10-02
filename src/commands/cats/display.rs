@@ -8,7 +8,6 @@ use chrono::Datelike;
 use crate::database::CollectedCat;
 use crate::time::paris_today;
 
-
 pub fn get_rarity_badge(score: i32) -> &'static str {
     match score {
         0..=5 => "",                    // Commun - pas de badge
@@ -282,4 +281,18 @@ pub(super) fn daily_house_scene(cat: &CollectedCat) -> &'static str {
     let day_seed = paris_today().num_days_from_ce() as usize;
     let cat_seed = cat.id as usize + cat.age_months as usize + cat.rarity_score as usize;
     scenes[(cat_seed + day_seed) % scenes.len()]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn age_affiche_en_mois_puis_en_annees() {
+        assert_eq!(format_age(3), "3 mois");
+        assert_eq!(format_age(12), "12 mois");
+        assert_eq!(format_age(24), "2 ans");
+        assert_eq!(format_age(13), "1 an et 1 mois");
+        assert_eq!(format_age(30), "2 ans et 6 mois");
+    }
 }

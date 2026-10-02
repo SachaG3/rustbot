@@ -99,11 +99,7 @@ pub async fn cat(ctx: &Context, msg: &Message) -> CommandResult {
         match add_collected_cat(
             pool,
             user.id,
-            &secret_cat.name,
-            secret_cat.breed.name,
-            secret_cat.color.name,
-            secret_cat.age_months,
-            secret_cat.rarity_score,
+            &secret_cat.as_new_cat(),
         )
         .await
         {
@@ -135,7 +131,6 @@ pub async fn cat(ctx: &Context, msg: &Message) -> CommandResult {
 
     Ok(())
 }
-
 
 #[command]
 #[description = "Affiche ta collection de chats"]
@@ -352,22 +347,7 @@ pub async fn trade(ctx: &Context, msg: &Message) -> CommandResult {
                 Ok(true) => {
                     let rarity_emoji = get_rarity_emoji(cat.rarity_score);
 
-                    let age_display = if cat.age_months <= 12 {
-                        format!("{} mois", cat.age_months)
-                    } else {
-                        let years = cat.age_months / 12;
-                        let months = cat.age_months % 12;
-                        if months == 0 {
-                            format!("{} an{}", years, if years > 1 { "s" } else { "" })
-                        } else {
-                            format!(
-                                "{} an{} et {} mois",
-                                years,
-                                if years > 1 { "s" } else { "" },
-                                months
-                            )
-                        }
-                    };
+                    let age_display = format_age(cat.age_months);
 
                     msg.channel_id.say(&ctx.http, format!(
                         "✅ **Adoption réussie !**\n\n{} **{} {} {} de {}** (#{}) a déménagé chez {} !\n\n🏠 {}",
