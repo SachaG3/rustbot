@@ -569,14 +569,30 @@ pub async fn get_cat_by_id(pool: &Pool<MySql>, cat_id: i32) -> Result<Option<Col
     }
 }
 
-pub async fn transfer_cat(pool: &Pool<MySql>, cat_id: i32, new_owner_id: i64) -> Result<(), Error> {
-    sqlx::query("UPDATE collected_cats SET user_id = ?, location = 'home', refuge_by_user_id = NULL, moved_to_refuge_at = NULL, is_favorite = 0 WHERE id = ?")
-        .bind(new_owner_id as i32)
-        .bind(cat_id)
-        .execute(pool)
-        .await?;
+/// Transfère un chat à un nouveau propriétaire.
+///
+/// La condition sur `user_id` et l'absence de promenade en cours sont vérifiées
+/// dans la requête elle-même pour éviter qu'un chat change de main entre la
+/// vérification et la mise à jour. Renvoie `false` si aucun chat n'a été transféré.
+pub async fn transfer_cat(
+    pool: &Pool<MySql>,
+    cat_id: i32,
+    current_owner_id: i64,
+    new_owner_id: i64,
+) -> Result<bool, Error> {
+    let result = sqlx::query(
+        "UPDATE collected_cats SET user_id = ?, location = 'home', refuge_by_user_id = NULL, moved_to_refuge_at = NULL, is_favorite = 0 \
+         WHERE id = ? AND user_id = ? \
+         AND NOT EXISTS (SELECT 1 FROM cat_expeditions WHERE cat_id = ? AND completed_at IS NULL)",
+    )
+    .bind(new_owner_id as i32)
+    .bind(cat_id)
+    .bind(current_owner_id as i32)
+    .bind(cat_id)
+    .execute(pool)
+    .await?;
 
-    Ok(())
+    Ok(result.rows_affected() == 1)
 }
 
 pub async fn get_user_cat_count(pool: &Pool<MySql>, user_id: i64) -> Result<i64, Error> {
@@ -723,12 +739,17 @@ pub async fn give_refuge_cat_to_user(
     pool: &Pool<MySql>,
     cat_id: i32,
     user_id: i64,
-) -> Result<(), Error> {
-    sqlx::query("UPDATE collected_cats SET user_id = ?, location = 'home', moved_to_refuge_at = NULL, is_favorite = 0 WHERE id = ? AND location = 'refuge'")
+) -> Result<bool, Error> {
+    let result = sqlx::query("UPDATE collected_cats SET user_id = ?, location = 'home', moved_to_refuge_at = NULL, is_favorite = 0 WHERE id = ? AND location = 'refuge'")
         .bind(user_id as i32)
         .bind(cat_id)
         .execute(pool)
         .await?;
+
+    // Le chat a pu être adopté entre-temps : on ne crée pas de souvenir fantôme.
+    if result.rows_affected() == 0 {
+        return Ok(false);
+    }
 
     add_cat_memory(
         pool,
@@ -739,7 +760,7 @@ pub async fn give_refuge_cat_to_user(
     )
     .await
     .ok();
-    Ok(())
+    Ok(true)
 }
 
 pub async fn get_cat_server_stats(pool: &Pool<MySql>) -> Result<(i64, i64, i64), Error> {

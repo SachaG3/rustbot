@@ -1185,8 +1185,8 @@ pub async fn trade(ctx: &Context, msg: &Message) -> CommandResult {
             };
 
             // Effectuer le transfert
-            match transfer_cat(&pool, cat_id, target_db_user.id).await {
-                Ok(_) => {
+            match transfer_cat(&pool, cat_id, user.id, target_db_user.id).await {
+                Ok(true) => {
                     let rarity_emoji = get_rarity_emoji(cat.rarity_score);
 
                     let age_display = if cat.age_months <= 12 {
@@ -1217,6 +1217,15 @@ pub async fn trade(ctx: &Context, msg: &Message) -> CommandResult {
                         target_user.name,
                         target_user.mention()
                     )).await.ok();
+                }
+                Ok(false) => {
+                    msg.channel_id
+                        .say(
+                            &ctx.http,
+                            "Ce chat ne peut plus être transféré (déjà échangé ou parti en promenade).",
+                        )
+                        .await
+                        .ok();
                 }
                 Err(_) => {
                     msg.channel_id
@@ -2923,10 +2932,10 @@ async fn spawn_adoption_resolution(ctx: Context, channel_id: ChannelId, duration
             Err(_) => return,
         };
 
-        if give_refuge_cat_to_user(&pool, chosen_cat.id, user.id)
-            .await
-            .is_err()
-        {
+        if !matches!(
+            give_refuge_cat_to_user(&pool, chosen_cat.id, user.id).await,
+            Ok(true)
+        ) {
             channel_id
                 .say(&ctx.http, "L'adoption n'a pas pu etre finalisee.")
                 .await
