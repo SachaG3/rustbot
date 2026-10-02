@@ -1,7 +1,5 @@
-use serenity::framework::standard::macros::group;
 use serenity::framework::standard::CommandResult;
-use serenity::framework::StandardFramework;
-use serenity::model::channel::{Message, ReactionType};
+use serenity::model::channel::Message;
 use serenity::model::prelude::*;
 use serenity::prelude::*;
 
@@ -13,43 +11,6 @@ pub mod games;
 pub mod profile;
 pub mod spam;
 pub mod valorant;
-
-pub use cats::{
-    adopter, caliner, cat, catcontrol, catevents, cats, catstats, chat, favori, house, mycats,
-    refuge, refuge_donner, surnom, trade, visite,
-};
-
-pub async fn wait_for_reaction(
-    ctx: &Context,
-    msg: &Message,
-    user_id: UserId,
-    reaction_type: ReactionType,
-    timeout_seconds: u64,
-) -> bool {
-    let _message_id = msg.id;
-
-    msg.react(&ctx.http, reaction_type.clone()).await.ok();
-
-    // Version simplifiée sans collector
-    let start_time = std::time::Instant::now();
-    let timeout_duration = std::time::Duration::from_secs(timeout_seconds);
-
-    while start_time.elapsed() < timeout_duration {
-        // Vérifier les réactions toutes les secondes
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-
-        if let Ok(reactions) = msg
-            .reaction_users(&ctx.http, reaction_type.clone(), None, None)
-            .await
-        {
-            if reactions.iter().any(|u| u.id == user_id) {
-                return true;
-            }
-        }
-    }
-
-    false
-}
 
 pub async fn wait_for_message(
     ctx: &Context,

@@ -12,14 +12,14 @@ async fn np(ctx: &Context, msg: &Message) -> CommandResult {
     let data = ctx.data.read().await;
     let pool = data.get::<DatabasePool>().expect("Erreur lors de l'obtention du pool de base de données");
     
-    match get_user_by_discord_id(&pool, msg.author.id.0).await {
+    match get_user_by_discord_id(pool, msg.author.id.0).await {
         Ok(Some(_)) => {
             if let Err(why) = msg.channel_id.say(&ctx.http, "Un profil existe déjà pour cet utilisateur.").await {
                 error!("Erreur lors de l'envoi du message: {:?}", why);
             }
         },
         Ok(None) => {
-            match new_user(&pool, msg.author.id.0, &msg.author.name).await {
+            match new_user(pool, msg.author.id.0, &msg.author.name).await {
                 Ok(_) => {
                     if let Err(why) = msg.channel_id.say(&ctx.http, "Profil créé avec succès!").await {
                         error!("Erreur lors de l'envoi du message: {:?}", why);
@@ -50,7 +50,7 @@ async fn score(ctx: &Context, msg: &Message) -> CommandResult {
     let data = ctx.data.read().await;
     let pool = data.get::<DatabasePool>().expect("Erreur lors de l'obtention du pool de base de données");
     
-    match get_user_by_discord_id(&pool, msg.author.id.0).await {
+    match get_user_by_discord_id(pool, msg.author.id.0).await {
         Ok(Some(user)) => {
             let score = user.score;
             
@@ -108,16 +108,16 @@ pub async fn update_profile_score(ctx: &Context, msg: &Message, points: i32) -> 
     let data = ctx.data.read().await;
     let pool = data.get::<DatabasePool>().expect("Erreur lors de l'obtention du pool de base de données");
     
-    match get_user_by_discord_id(&pool, msg.author.id.0).await {
+    match get_user_by_discord_id(pool, msg.author.id.0).await {
         Ok(Some(user)) => {
-            if let Err(e) = update_user_score(&pool, user.id, points).await {
+            if let Err(e) = update_user_score(pool, user.id, points).await {
                 error!("Erreur lors de la mise à jour du score: {:?}", e);
             }
         },
         Ok(None) => {
-            match new_user(&pool, msg.author.id.0, &msg.author.name).await {
+            match new_user(pool, msg.author.id.0, &msg.author.name).await {
                 Ok(user_id) => {
-                    if let Err(e) = update_user_score(&pool, user_id, points).await {
+                    if let Err(e) = update_user_score(pool, user_id, points).await {
                         error!("Erreur lors de la mise à jour du score: {:?}", e);
                     }
                 },

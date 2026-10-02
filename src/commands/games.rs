@@ -666,7 +666,7 @@ async fn play_dealer_phase(
     game: &mut BlackjackGame
 ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
     // Construire un message pour la phase du croupier
-    let mut dealer_play_message = format!("**📝 Phase du croupier:**\n\n");
+    let mut dealer_play_message = "**📝 Phase du croupier:**\n\n".to_string();
     
     // Révéler la deuxième carte du croupier
     dealer_play_message.push_str(&format!("➡️ Le croupier révèle sa carte cachée: **{} de {}**\n", 
@@ -793,7 +793,7 @@ async fn handle_split(
 fn calculate_final_points(game: &BlackjackGame, bet: Option<i32>) -> i32 {
     let mut total_points = 0;
     
-    for (_i, hand) in game.player_hands.iter().enumerate() {
+    for hand in game.player_hands.iter() {
         if hand.total > 21 {
             continue; // Main perdue, pas de points
         }
@@ -1024,13 +1024,10 @@ async fn get_message_response(ctx: &Context, msg: &Message, timeout_seconds: f32
     let channel_id = msg.channel_id;
     
     // Utiliser tokio timeout pour attendre un message
-    match tokio::time::timeout(
+    tokio::time::timeout(
         std::time::Duration::from_secs_f32(timeout_seconds),
         wait_for_message_simple(ctx, channel_id, author_id)
-    ).await {
-        Ok(message) => message,
-        _ => None,
-    }
+    ).await.unwrap_or_default()
 }
 
 async fn wait_for_message_simple(ctx: &Context, channel_id: ChannelId, author_id: UserId) -> Option<Message> {
@@ -1079,20 +1076,5 @@ async fn wait_for_reaction_with_options(ctx: &Context, msg: &Message, user_id: U
     }
     
     None
-}
-
-// Compter le nombre d'As dans un ensemble de cartes
-fn count_aces(cards: &Card, cards2: &Card) -> i32 {
-    let mut aces = 0;
-    
-    if cards.value == "As" {
-        aces += 1;
-    }
-    
-    if cards2.value == "As" {
-        aces += 1;
-    }
-    
-    aces
 }
 

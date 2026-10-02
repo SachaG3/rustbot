@@ -32,7 +32,7 @@ fn build_snowflake_boundary(date: DateTime<Utc>, is_before: bool) -> u64 {
     if is_before {
         base_snowflake | ((1u64 << 22) - 1)
     } else {
-        base_snowflake.saturating_sub(1).max(0)
+        base_snowflake.saturating_sub(1)
     }
 }
 
@@ -149,10 +149,9 @@ pub async fn perform_cat_checkup(ctx: &Context) {
                             record_activity(&pool, user.id, "daily_cat").await.ok();
 
                             // Compter le total de cats
-                            let total_count = match get_daily_cat_count(&pool, user.id).await {
-                                Ok(count) => count,
-                                Err(_) => 0,
-                            };
+                            let total_count = get_daily_cat_count(&pool, user.id)
+                                .await
+                                .unwrap_or_default();
 
                             println!("  ✅ Cat attribué à {} pour le {} (total: {})", user_id, date_to_check, total_count);
 

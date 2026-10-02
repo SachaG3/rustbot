@@ -248,45 +248,6 @@ pub async fn update_user_score(pool: &Pool<MySql>, user_id: i64, points: i32) ->
     Ok(())
 }
 
-pub async fn get_user_score(pool: &Pool<MySql>, user_id: i64) -> Result<i32, Error> {
-    let row = sqlx::query("SELECT score FROM utilisateurs WHERE id = ?")
-        .bind(user_id)
-        .fetch_one(pool)
-        .await?;
-
-    let score: i32 = row.get("score");
-
-    Ok(score)
-}
-
-pub async fn get_user_by_username(
-    pool: &Pool<MySql>,
-    username: &str,
-) -> Result<Option<User>, Error> {
-    let row =
-        sqlx::query("SELECT id, id_utilisateur, pseudo, score FROM utilisateurs WHERE pseudo = ?")
-            .bind(username)
-            .fetch_optional(pool)
-            .await?;
-
-    match row {
-        Some(row) => {
-            let id: i64 = row.get("id");
-            let idutil: String = row.get("id_utilisateur");
-            let pseudo: String = row.get("pseudo");
-            let score: i32 = row.get("score");
-
-            Ok(Some(User {
-                id,
-                id_utilisateur: idutil,
-                pseudo,
-                score,
-            }))
-        }
-        None => Ok(None),
-    }
-}
-
 pub async fn add_daily_cat(pool: &Pool<MySql>, user_id: i64) -> Result<i64, Error> {
     let result = sqlx::query("INSERT INTO daily_cats (user_id, created_at) VALUES (?, ?)")
         .bind(user_id)
@@ -342,23 +303,6 @@ pub async fn get_daily_cat_count_today(pool: &Pool<MySql>) -> Result<i64, Error>
     Ok(row.get("cnt"))
 }
 
-pub async fn debug_daily_cats(pool: &Pool<MySql>, user_id: i64) -> Result<Vec<String>, Error> {
-    let rows = sqlx::query(
-        "SELECT created_at FROM daily_cats WHERE user_id = ? ORDER BY created_at DESC LIMIT 5",
-    )
-    .bind(user_id)
-    .fetch_all(pool)
-    .await?;
-
-    let mut dates = Vec::new();
-    for row in rows {
-        // Utiliser le bon type selon ta structure de table (TIMESTAMP)
-        let date: chrono::DateTime<chrono::Utc> = row.get("created_at");
-        dates.push(date.format("%Y-%m-%d %H:%M:%S").to_string());
-    }
-    Ok(dates)
-}
-
 pub async fn has_daily_cat_today(pool: &Pool<MySql>, user_id: i64) -> Result<bool, Error> {
     let row = sqlx::query(
         "SELECT 1 FROM daily_cats WHERE user_id = ? AND DATE(created_at) = ? LIMIT 1",
@@ -370,6 +314,8 @@ pub async fn has_daily_cat_today(pool: &Pool<MySql>, user_id: i64) -> Result<boo
     Ok(row.is_some())
 }
 
+// Reflète les colonnes de la table : certains champs ne sont pas encore lus.
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct CollectedCat {
     pub id: i32,
@@ -396,6 +342,8 @@ pub struct CatCounts {
     pub total: i64,
 }
 
+// Reflète les colonnes de la table : certains champs ne sont pas encore lus.
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct CatMemory {
     pub description: String,
@@ -983,6 +931,8 @@ fn random_cat_mood() -> &'static str {
     moods[thread_rng().gen_range(0..moods.len())]
 }
 
+// Reflète les colonnes de la table : certains champs ne sont pas encore lus.
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct User {
     pub id: i64,
@@ -991,6 +941,8 @@ pub struct User {
     pub score: i32,
 }
 
+// Reflète les colonnes de la table : certains champs ne sont pas encore lus.
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct Guild {
     pub id: i64,

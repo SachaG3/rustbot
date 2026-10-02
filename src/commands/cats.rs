@@ -124,7 +124,7 @@ impl Cat {
             _ => 14 + (raw_score - 18) / 4,       // Scores très élevés : réduction forte
         };
 
-        capped_score.max(1).min(20)
+        capped_score.clamp(1, 20)
     }
 
     pub fn generate_random() -> Self {
@@ -589,10 +589,10 @@ pub async fn cat(ctx: &Context, msg: &Message) -> CommandResult {
         .get::<DatabasePool>()
         .expect("Impossible d'obtenir le pool");
 
-    let user = match get_user_by_discord_id(&pool, msg.author.id.0).await {
+    let user = match get_user_by_discord_id(pool, msg.author.id.0).await {
         Ok(Some(u)) => u,
         Ok(None) => {
-            let user_id = new_user(&pool, msg.author.id.0, &msg.author.name).await?;
+            let user_id = new_user(pool, msg.author.id.0, &msg.author.name).await?;
             crate::database::User {
                 id: user_id,
                 id_utilisateur: msg.author.id.0.to_string(),
@@ -609,7 +609,7 @@ pub async fn cat(ctx: &Context, msg: &Message) -> CommandResult {
         }
     };
 
-    if has_daily_cat_today(&pool, user.id).await.unwrap_or(false) {
+    if has_daily_cat_today(pool, user.id).await.unwrap_or(false) {
         let messages = [
             "Tu as déjà récupéré ton 🐱 du jour. Il dort maintenant dans un coin en prétendant ne pas te connaître.",
             "Ton 🐱 quotidien est déjà passé aujourd'hui. Il a laissé quelques poils sur le canapé avant de disparaître.",
@@ -627,7 +627,7 @@ pub async fn cat(ctx: &Context, msg: &Message) -> CommandResult {
     }
 
     // Donner le daily cat comme avant
-    if add_daily_cat(&pool, user.id).await.is_err() {
+    if add_daily_cat(pool, user.id).await.is_err() {
         msg.channel_id
             .say(&ctx.http, "Impossible d'ajouter le Cat")
             .await
@@ -635,7 +635,7 @@ pub async fn cat(ctx: &Context, msg: &Message) -> CommandResult {
         return Ok(());
     }
 
-    let total = match get_daily_cat_count(&pool, user.id).await {
+    let total = match get_daily_cat_count(pool, user.id).await {
         Ok(c) => c,
         Err(_) => {
             msg.channel_id
@@ -660,7 +660,7 @@ pub async fn cat(ctx: &Context, msg: &Message) -> CommandResult {
 
         // Sauvegarder le chat secret en base
         match add_collected_cat(
-            &pool,
+            pool,
             user.id,
             &secret_cat.name,
             secret_cat.breed.name,
@@ -672,7 +672,7 @@ pub async fn cat(ctx: &Context, msg: &Message) -> CommandResult {
         {
             Ok(cat_id) => {
                 let rarity_emoji = get_rarity_emoji(secret_cat.rarity_score);
-                let temperament = match get_cat_by_id(&pool, cat_id).await {
+                let temperament = match get_cat_by_id(pool, cat_id).await {
                     Ok(Some(cat)) => cat.personality.unwrap_or_else(|| "mysterieux".to_string()),
                     _ => "mysterieux".to_string(),
                 };
@@ -691,9 +691,9 @@ pub async fn cat(ctx: &Context, msg: &Message) -> CommandResult {
     }
 
     msg.channel_id.say(&ctx.http, response).await.ok();
-    record_daily_cat_and_roll_challenge(ctx, msg, &pool, user.id).await;
-    if matches!(get_daily_cat_count_today(&pool).await, Ok(1)) {
-        maybe_trigger_cat_event(ctx, msg, &pool).await;
+    record_daily_cat_and_roll_challenge(ctx, msg, pool, user.id).await;
+    if matches!(get_daily_cat_count_today(pool).await, Ok(1)) {
+        maybe_trigger_cat_event(ctx, msg, pool).await;
     }
 
     Ok(())
@@ -790,7 +790,7 @@ fn format_mycats_page(
     requested_page: usize,
 ) -> (String, usize, usize) {
     let per_page = 10usize;
-    let total_pages = ((cats.len() + per_page - 1) / per_page).max(1);
+    let total_pages = cats.len().div_ceil(per_page).max(1);
     let page = requested_page.clamp(1, total_pages);
     let start = (page - 1) * per_page;
     let end = (start + per_page).min(cats.len());
@@ -983,7 +983,7 @@ pub async fn mycats(ctx: &Context, msg: &Message, mut args: Args) -> CommandResu
         .expect("Impossible d'obtenir le pool");
     let requested_page = args.single::<usize>().unwrap_or(1).max(1);
 
-    let user = match get_user_by_discord_id(&pool, msg.author.id.0).await {
+    let user = match get_user_by_discord_id(pool, msg.author.id.0).await {
         Ok(Some(u)) => u,
         Ok(None) => {
             msg.channel_id
@@ -1004,7 +1004,7 @@ pub async fn mycats(ctx: &Context, msg: &Message, mut args: Args) -> CommandResu
         }
     };
 
-    match get_user_cats(&pool, user.id).await {
+    match get_user_cats(pool, user.id).await {
         Ok(cats) => {
             if cats.is_empty() {
                 msg.channel_id.say(&ctx.http, "Aucun chat ne vit encore chez toi ! Utilise `^^cat` pour peut-être en adopter un.").await.ok();
@@ -1047,10 +1047,10 @@ pub async fn cats(ctx: &Context, msg: &Message) -> CommandResult {
         .get::<DatabasePool>()
         .expect("Impossible d'obtenir le pool");
 
-    match get_user_by_discord_id(&pool, msg.author.id.0).await {
-        Ok(Some(user)) => match get_daily_cat_count(&pool, user.id).await {
+    match get_user_by_discord_id(pool, msg.author.id.0).await {
+        Ok(Some(user)) => match get_daily_cat_count(pool, user.id).await {
             Ok(total) => {
-                let counts = get_user_cat_counts(&pool, user.id).await.ok();
+                let counts = get_user_cat_counts(pool, user.id).await.ok();
                 let mut response = format!("🐱 Daily cats classiques: {}", total);
 
                 if let Some(counts) = counts {
@@ -1105,7 +1105,7 @@ pub async fn trade(ctx: &Context, msg: &Message) -> CommandResult {
         return Ok(());
     }
 
-    let user = match get_user_by_discord_id(&pool, msg.author.id.0).await {
+    let user = match get_user_by_discord_id(pool, msg.author.id.0).await {
         Ok(Some(u)) => u,
         Ok(None) => {
             msg.channel_id
@@ -1139,7 +1139,7 @@ pub async fn trade(ctx: &Context, msg: &Message) -> CommandResult {
     };
 
     // Vérifier que le chat appartient à l'utilisateur
-    match get_cat_by_id(&pool, cat_id).await {
+    match get_cat_by_id(pool, cat_id).await {
         Ok(Some(cat)) => {
             if cat.user_id != user.id as i32 {
                 msg.channel_id
@@ -1149,7 +1149,7 @@ pub async fn trade(ctx: &Context, msg: &Message) -> CommandResult {
                 return Ok(());
             }
 
-            if is_cat_on_expedition(&pool, cat_id).await.unwrap_or(false) {
+            if is_cat_on_expedition(pool, cat_id).await.unwrap_or(false) {
                 msg.channel_id
                     .say(
                         &ctx.http,
@@ -1166,7 +1166,7 @@ pub async fn trade(ctx: &Context, msg: &Message) -> CommandResult {
                 Err(_) => return Ok(()),
             };
 
-            let target_db_user = match get_user_by_discord_id(&pool, target_user.id.0).await {
+            let target_db_user = match get_user_by_discord_id(pool, target_user.id.0).await {
                 Ok(Some(u)) => u,
                 Ok(None) => {
                     msg.channel_id
@@ -1185,7 +1185,7 @@ pub async fn trade(ctx: &Context, msg: &Message) -> CommandResult {
             };
 
             // Effectuer le transfert
-            match transfer_cat(&pool, cat_id, user.id, target_db_user.id).await {
+            match transfer_cat(pool, cat_id, user.id, target_db_user.id).await {
                 Ok(true) => {
                     let rarity_emoji = get_rarity_emoji(cat.rarity_score);
 
@@ -1275,7 +1275,7 @@ async fn show_house(ctx: &Context, msg: &Message, is_visit: bool) -> CommandResu
         .first()
         .cloned()
         .unwrap_or_else(|| msg.author.clone());
-    let user = match get_user_by_discord_id(&pool, target.id.0).await {
+    let user = match get_user_by_discord_id(pool, target.id.0).await {
         Ok(Some(user)) => user,
         Ok(None) => {
             msg.channel_id
@@ -1293,16 +1293,16 @@ async fn show_house(ctx: &Context, msg: &Message, is_visit: bool) -> CommandResu
         }
     };
 
-    let daily_total = get_daily_cat_count(&pool, user.id).await.unwrap_or(0);
-    let counts = get_user_cat_counts(&pool, user.id)
+    let daily_total = get_daily_cat_count(pool, user.id).await.unwrap_or(0);
+    let counts = get_user_cat_counts(pool, user.id)
         .await
         .unwrap_or(crate::database::CatCounts {
             home: 0,
             refuge: 0,
             total: 0,
         });
-    let cats = get_user_cats(&pool, user.id).await.unwrap_or_default();
-    let decorations = get_equipped_decorations(&pool, user.id)
+    let cats = get_user_cats(pool, user.id).await.unwrap_or_default();
+    let decorations = get_equipped_decorations(pool, user.id)
         .await
         .unwrap_or_default();
 
@@ -1346,8 +1346,8 @@ async fn show_house(ctx: &Context, msg: &Message, is_visit: bool) -> CommandResu
     }
 
     if is_visit && target.id != msg.author.id {
-        if let Ok(Some(visitor)) = get_user_by_discord_id(&pool, msg.author.id.0).await {
-            record_activity(&pool, visitor.id, "visit").await.ok();
+        if let Ok(Some(visitor)) = get_user_by_discord_id(pool, msg.author.id.0).await {
+            record_activity(pool, visitor.id, "visit").await.ok();
         }
     }
 
@@ -1363,7 +1363,7 @@ pub async fn refuge(ctx: &Context, msg: &Message) -> CommandResult {
         .get::<DatabasePool>()
         .expect("Impossible d'obtenir le pool");
 
-    match get_refuge_cats(&pool, 12).await {
+    match get_refuge_cats(pool, 12).await {
         Ok(cats) if cats.is_empty() => {
             msg.channel_id
                 .say(&ctx.http, "🐾 Le refuge est vide pour le moment.")
@@ -1413,7 +1413,7 @@ pub async fn refuge_donner(ctx: &Context, msg: &Message, mut args: Args) -> Comm
     let pool = data
         .get::<DatabasePool>()
         .expect("Impossible d'obtenir le pool");
-    let user = match get_user_by_discord_id(&pool, msg.author.id.0).await {
+    let user = match get_user_by_discord_id(pool, msg.author.id.0).await {
         Ok(Some(user)) => user,
         _ => {
             msg.channel_id
@@ -1424,7 +1424,7 @@ pub async fn refuge_donner(ctx: &Context, msg: &Message, mut args: Args) -> Comm
         }
     };
 
-    let cat = match get_cat_by_id(&pool, cat_id).await {
+    let cat = match get_cat_by_id(pool, cat_id).await {
         Ok(Some(cat)) if cat.user_id == user.id as i32 && cat.location == "home" => cat,
         Ok(Some(_)) => {
             msg.channel_id
@@ -1442,7 +1442,7 @@ pub async fn refuge_donner(ctx: &Context, msg: &Message, mut args: Args) -> Comm
         }
     };
 
-    if is_cat_on_expedition(&pool, cat_id).await.unwrap_or(false) {
+    if is_cat_on_expedition(pool, cat_id).await.unwrap_or(false) {
         msg.channel_id
             .say(
                 &ctx.http,
@@ -1453,7 +1453,7 @@ pub async fn refuge_donner(ctx: &Context, msg: &Message, mut args: Args) -> Comm
         return Ok(());
     }
 
-    if move_cat_to_refuge(&pool, cat_id, user.id).await.is_err() {
+    if move_cat_to_refuge(pool, cat_id, user.id).await.is_err() {
         msg.channel_id
             .say(&ctx.http, "Impossible de confier ce chat au refuge.")
             .await
@@ -1515,7 +1515,7 @@ pub async fn surnom(ctx: &Context, msg: &Message) -> CommandResult {
     let pool = data
         .get::<DatabasePool>()
         .expect("Impossible d'obtenir le pool");
-    let user = match get_user_by_discord_id(&pool, msg.author.id.0).await {
+    let user = match get_user_by_discord_id(pool, msg.author.id.0).await {
         Ok(Some(user)) => user,
         _ => {
             msg.channel_id
@@ -1532,7 +1532,7 @@ pub async fn surnom(ctx: &Context, msg: &Message) -> CommandResult {
         Some(nickname)
     };
 
-    if set_cat_nickname(&pool, cat_id, user.id, new_nickname)
+    if set_cat_nickname(pool, cat_id, user.id, new_nickname)
         .await
         .is_err()
     {
@@ -1570,7 +1570,7 @@ pub async fn favori(ctx: &Context, msg: &Message, mut args: Args) -> CommandResu
     let pool = data
         .get::<DatabasePool>()
         .expect("Impossible d'obtenir le pool");
-    let user = match get_user_by_discord_id(&pool, msg.author.id.0).await {
+    let user = match get_user_by_discord_id(pool, msg.author.id.0).await {
         Ok(Some(user)) => user,
         _ => {
             msg.channel_id
@@ -1581,9 +1581,9 @@ pub async fn favori(ctx: &Context, msg: &Message, mut args: Args) -> CommandResu
         }
     };
 
-    match get_cat_by_id(&pool, cat_id).await {
+    match get_cat_by_id(pool, cat_id).await {
         Ok(Some(cat)) if cat.user_id == user.id as i32 && cat.location == "home" => {
-            set_favorite_cat(&pool, user.id, cat_id).await?;
+            set_favorite_cat(pool, user.id, cat_id).await?;
             msg.channel_id
                 .say(
                     &ctx.http,
@@ -1625,7 +1625,7 @@ pub async fn chat(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
         .get::<DatabasePool>()
         .expect("Impossible d'obtenir le pool");
 
-    let cat = match get_cat_by_id(&pool, cat_id).await {
+    let cat = match get_cat_by_id(pool, cat_id).await {
         Ok(Some(cat)) => cat,
         _ => {
             msg.channel_id
@@ -1652,7 +1652,7 @@ pub async fn chat(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
         location
     );
 
-    if let Ok(memories) = get_cat_memories(&pool, cat.id, 4).await {
+    if let Ok(memories) = get_cat_memories(pool, cat.id, 4).await {
         if !memories.is_empty() {
             response += "\n\nSouvenirs:";
             for memory in memories {
@@ -1673,7 +1673,7 @@ pub async fn catstats(ctx: &Context, msg: &Message) -> CommandResult {
         .get::<DatabasePool>()
         .expect("Impossible d'obtenir le pool");
 
-    match get_cat_server_stats(&pool).await {
+    match get_cat_server_stats(pool).await {
         Ok((daily, home, refuge_count)) => {
             msg.channel_id.say(&ctx.http, format!(
                 "📊 **Stats chats du serveur**\n🐱 Daily cats classiques: {}\n🏠 Résidents dans les maisons: {}\n🐾 Résidents au refuge: {}\n📊 Total résidents nommés: {}",
@@ -2034,7 +2034,7 @@ async fn start_cat_event(
         events.insert(
             channel_id.0,
             CatEvent {
-                kind: kind.clone(),
+                kind,
                 participants: HashSet::new(),
                 theme,
             },

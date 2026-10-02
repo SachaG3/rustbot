@@ -110,8 +110,8 @@ pub async fn link(ctx: &Context, msg: &Message) -> CommandResult {
         .get::<DatabasePool>()
         .expect("Erreur lors de l'obtention du pool de base de données");
 
-    match get_user_by_discord_id(&pool, msg.author.id.0).await {
-        Ok(Some(user)) => match new_token(&pool, user.id).await {
+    match get_user_by_discord_id(pool, msg.author.id.0).await {
+        Ok(Some(user)) => match new_token(pool, user.id).await {
             Ok(token) => {
                 let url = format!("https://www.soyerbot.fr/token/{}", token);
                 if let Err(why) = msg

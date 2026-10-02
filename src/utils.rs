@@ -379,11 +379,7 @@ impl Card {
         Self { value, suit }
     }
     
-    pub fn to_string(&self) -> String {
-        format!("{} de {}", self.value, self.suit)
-    }
-    
-    pub fn value(&self) -> i32 {
+pub fn value(&self) -> i32 {
         match self.value.as_str() {
             "As" => 11,
             "Roi" | "Dame" | "Valet" => 10,
@@ -409,98 +405,3 @@ pub fn generate_card() -> (Card, i32) {
     (card, card_value)
 }
 
-fn get_digit_pattern(digit: usize) -> [bool; 35] {
-    match digit {
-        0 => [
-            true,  true,  true,  true,  true,
-            true,  false, false, false, true,
-            true,  false, false, false, true,
-            true,  false, false, false, true,
-            true,  false, false, false, true,
-            true,  false, false, false, true,
-            true,  true,  true,  true,  true,
-        ],
-        1 => [
-            false, false, true,  false, false,
-            false, false, true,  false, false,
-            false, false, true,  false, false,
-            false, false, true,  false, false,
-            false, false, true,  false, false,
-            false, false, true,  false, false,
-            false, false, true,  false, false,
-        ],
-        2 => [
-            true,  true,  true,  true,  true,
-            false, false, false, false, true,
-            false, false, false, false, true,
-            true,  true,  true,  true,  true,
-            true,  false, false, false, false,
-            true,  false, false, false, false,
-            true,  true,  true,  true,  true,
-        ],
-        3 => [
-            true,  true,  true,  true,  true,
-            false, false, false, false, true,
-            false, false, false, false, true,
-            true,  true,  true,  true,  true,
-            false, false, false, false, true,
-            false, false, false, false, true,
-            true,  true,  true,  true,  true,
-        ],
-        4 => [
-            true,  false, false, false, true,
-            true,  false, false, false, true,
-            true,  false, false, false, true,
-            true,  true,  true,  true,  true,
-            false, false, false, false, true,
-            false, false, false, false, true,
-            false, false, false, false, true,
-        ],
-        5 => [
-            true,  true,  true,  true,  true,
-            true,  false, false, false, false,
-            true,  false, false, false, false,
-            true,  true,  true,  true,  true,
-            false, false, false, false, true,
-            false, false, false, false, true,
-            true,  true,  true,  true,  true,
-        ],
-        6 => [
-            true,  true,  true,  true,  true,
-            true,  false, false, false, false,
-            true,  false, false, false, false,
-            true,  true,  true,  true,  true,
-            true,  false, false, false, true,
-            true,  false, false, false, true,
-            true,  true,  true,  true,  true,
-        ],
-        7 => [
-            true,  true,  true,  true,  true,
-            false, false, false, false, true,
-            false, false, false, false, true,
-            false, false, false, false, true,
-            false, false, false, false, true,
-            false, false, false, false, true,
-            false, false, false, false, true,
-        ],
-        8 => [
-            true,  true,  true,  true,  true,
-            true,  false, false, false, true,
-            true,  false, false, false, true,
-            true,  true,  true,  true,  true,
-            true,  false, false, false, true,
-            true,  false, false, false, true,
-            true,  true,  true,  true,  true,
-        ],
-        9 => [
-            true,  true,  true,  true,  true,
-            true,  false, false, false, true,
-            true,  false, false, false, true,
-            true,  true,  true,  true,  true,
-            false, false, false, false, true,
-            false, false, false, false, true,
-            true,  true,  true,  true,  true,
-        ],
-        _ => [false; 35], // Cas par défaut vide
-    }
-} 
